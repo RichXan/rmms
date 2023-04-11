@@ -135,3 +135,16 @@ func (r *RmmsClient) ActionCmdSub(cmd []byte) {
 		r.Ws.Pubscribe(replyTopic, response.CmdError.MarshalToBytes(connectCmd.Seq))
 	}
 }
+
+// 通用的监听函数
+func (r *RmmsClient) SubListen(data []byte) {
+	var cmd map[string]interface{}
+
+	// 解析接收到的数据
+	err := json.Unmarshal(data, &cmd)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	log.Printf("接收到的数据: %+v \r", cmd)
+}

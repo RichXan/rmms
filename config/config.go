@@ -4,17 +4,17 @@ import "mms/websocket"
 
 // 全局配置
 type GlobalConfig struct {
-	StompTopic  *Topic                   `yaml:"topic"`
-	StompConfig *websocket.StompWSConfig `yaml:"stomp"`
+	StompTopic  *Topic                   `yaml:"topic" mapstructure:"topic"`
+	StompConfig *websocket.StompWSConfig `yaml:"stomp" mapstructure:"stomp"`
 }
 
 // 后端服务器websocket通信相关配置
 type Topic struct {
-	ModuleName string `mapstructure:"moduleName"`
-	CmdSub     string `mapstructure:"cmdSub"`
-	CmdReply   string `mapstructure:"cmdReply"`
-	DataPush   string `mapstructure:"dataPush"`
-	StatusPush string `mapstructure:"statusPush"`
+	ModuleName string `yaml:"moduleName" mapstructure:"moduleName"`
+	CmdSub     string `yaml:"cmdSub" mapstructure:"cmdSub"`
+	CmdReply   string `yaml:"cmdReply" mapstructure:"cmdReply"`
+	DataPush   string `yaml:"dataPush" mapstructure:"dataPush"`
+	StatusPush string `yaml:"statusPush" mapstructure:"statusPush"`
 }
 
 // 后端服务器发送的指令json格式
@@ -40,4 +40,3 @@ type ConnectCmd struct {
 		ProjectName string `json:"projectName"`
 	} `json:"payload"`
 }
-

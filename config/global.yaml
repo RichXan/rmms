@@ -1,16 +1,21 @@
-topic:
-  moduleName: 3DLidar
-  cmdSub: /topic/cmd.3DLidar.post # 订阅：服务器发送过来的控制指令，做出相应操作
-  cmdReply: /topic/cmd.reply # 发布：对相应控制指令操作结束后，对控制消息回复
-  dataPush: /topic/data.push # 发布：主动向服务器推送数据消息
-  statusPush: /topic/status.push # 发布：主动向服务器推送状态消息
+# 订阅cmdSub：服务器发送过来的控制指令，做出相应操作
+# 发布cmdReply：对相应控制指令操作结束后，对控制消息回复
+# 发布dataPush：主动向服务器推送数据消息
+# 发布statusPush：主动向服务器推送状态消息
 
 stomp:
   host: frp.sealan.tech
   port: 21113
-  name:
-  passwd:
-  timeout:
+  name: admin
+  passwd: sealan
+  timeout: 10
+
+topic:
+  moduleName: 3DLidar
+  cmdSub: /topic/cmd.3DLidar.post
+  cmdReply: /topic/cmd.reply
+  dataPush: /topic/data.push
+  statusPush: /topic/status.push
 
 hanningRmmsNs:
   tcpIp: 192.168.1.92

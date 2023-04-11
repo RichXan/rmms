@@ -21,11 +21,11 @@ type IStompWS interface {
 
 // stomp websocket 配置
 type StompWSConfig struct {
-	Host    string `mapstructure:"host"`
-	Port    string `mapstructure:"port"`
-	Name    string `mapstructure:"name"`
-	Passwd  string `mapstructure:"passwd"`
-	Timeout int    `mapstructure:"timeout"`
+	Host    string `mapstructure:"host" yaml:"host"`
+	Port    string `mapstructure:"port" yaml:"port"`
+	Name    string `mapstructure:"name" yaml:"name"`
+	Passwd  string `mapstructure:"passwd" yaml:"passwd"`
+	Timeout int    `mapstructure:"timeout" yaml:"timeout"`
 }
 
 // 订阅参数结构体
@@ -223,6 +223,7 @@ func (ws *StompWS) WebsocketStart() {
 // #return      None
 func (ws *StompWS) WebsocketInit(stompWSConfig *StompWSConfig) {
 	ws.config = stompWSConfig
+	ws.stompWSConn(ws.config)
 }
 
 func NewStompWs() *StompWS {

@@ -57,8 +57,9 @@ func NewRmmsClient(config *config.GlobalConfig) *RmmsClient {
 	ws := websocket.NewStompWs()
 	ws.WebsocketInit(config.StompConfig)
 	return &RmmsClient{
-		tc: tc,
-		Ws: ws,
+		tc:     tc,
+		Ws:     ws,
+		config: config,
 		Param: &RmmsParam{
 			Status: RmmsDisconn,
 		},
