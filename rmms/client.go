@@ -38,9 +38,11 @@ const (
 )
 
 type RmmsParam struct {
+	Seq         int        // 序列号
 	Status      RmmsStatus // 状态
 	TaskID      string     // 任务ID
 	ProjectPath string     // 项目路径
+	ModuleName  string     // 模块名称
 }
 
 type RmmsClient struct {
@@ -61,7 +63,8 @@ func NewRmmsClient(config *config.GlobalConfig) *RmmsClient {
 		Ws:     ws,
 		config: config,
 		Param: &RmmsParam{
-			Status: RmmsDisconn,
+			Status:     RmmsDisconn,
+			ModuleName: "3DLidar",
 		},
 	}
 }
@@ -73,6 +76,8 @@ func (r *RmmsClient) Action1_StartServer() *response.ReplyResponse {
 		return response.StartServerError
 	}
 
+	r.Ws.Pubscribe(r.config.StompTopic.CmdReply,
+		response.WaitForConnReply.MarshalToBytes(r.Param.Seq))
 	// 等待十秒
 	time.Sleep(10 * time.Second)
 	return nil
@@ -192,6 +197,8 @@ func (r *RmmsClient) Action3_NewProject(projectName string) *response.ReplyRespo
 		return response.NewProjectError
 	}
 
+	r.Ws.Pubscribe(r.config.StompTopic.CmdReply,
+		response.WaitForStartReply.MarshalToBytes(r.Param.Seq))
 	// 占用锁，等待五分钟
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
@@ -241,6 +248,8 @@ func (r *RmmsClient) Action4_StartStation() *response.ReplyResponse {
 		return response.StartScannerError
 	}
 
+	r.Ws.Pubscribe(r.config.StompTopic.CmdReply,
+		response.WaitForStartReply.MarshalToBytes(r.Param.Seq))
 	// 占用锁，等待90秒
 	fmt.Println("正在启动测站扫描，等待90秒")
 	r.mutex.Lock()
@@ -262,6 +271,8 @@ func (r *RmmsClient) Action5_StopStation() *response.ReplyResponse {
 		return response.StopStationError
 	}
 
+	r.Ws.Pubscribe(r.config.StompTopic.CmdReply,
+		response.WaitForStopReply.MarshalToBytes(r.Param.Seq))
 	// 占用锁，等待五分钟
 	r.mutex.Lock()
 	defer r.mutex.Unlock()

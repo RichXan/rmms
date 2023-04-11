@@ -26,8 +26,6 @@ type ConnectCmd struct {
 		ProjectInfo struct {
 			Path string `json:"path"`
 		} `json:"projectInfo"`
-		DeviceInfo struct {
-		} `json:"deviceInfo"`
 		DeviceSysParams struct {
 			Lidarparameter struct {
 				NScanType          int     `json:"nScanType"`

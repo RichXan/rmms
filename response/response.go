@@ -12,6 +12,39 @@ type ReplyResponse struct {
 	Msg  string `json:"msg"`
 }
 
+// 回复状态的json格式
+type StatusResponse struct {
+	Seq        int    `json:"seq"`
+	ModuleName string `json:"module_name"`
+	State      State  `json:"state"`
+}
+
+type State struct {
+	Status int `json:"status"`
+}
+
+// 回复数据的json格式
+type DataResponse struct {
+	Seq        int    `json:"seq"`
+	ModuleName string `json:"module_name"`
+	Data       Data   `json:"data"`
+}
+
+type Data struct {
+	DevicesValue DevicesValue `json:"devicesvalue"`
+}
+
+type DevicesValue struct {
+	DAQCollectStatus     string `json:"DAQCollectStatus"`
+	DAQFileSize          string `json:"DAQFileSize"`
+	DAQCollectTime       string `json:"DAQCollectTime"`
+	ScannerCollectStatus string `json:"ScannerCollectStatus"`
+	FreeSpace            string `json:"FreeSpace"`
+	LidarFileSizeMB      string `json:"LidarFileSizeMB"`
+	GrayImage            string `json:"GrayImage"`
+	DepthImage           string `json:"DepthImage"`
+}
+
 var codes = map[int]string{}
 
 // 创建接口标准返回错误
@@ -77,4 +110,10 @@ var (
 	// 服务器错误
 	JsonMarshalError   = NewResponse(95001, "json序列化错误")
 	JsonUnmarshalError = NewResponse(95002, "json反序列化错误")
+
+	// 执行中，等待的回复
+	WaitForConnReply    = NewResponse(70001, "启动操控服务程序，连接服务中...")
+	WaitForStartReply   = NewResponse(70002, "激光雷达惯导检测中...")
+	WaitForStopReply    = NewResponse(70003, "停止测站扫描并保存工程中...")
+	WaitForDisconnReply = NewResponse(70004, "关闭设备，断开连接中...")
 )

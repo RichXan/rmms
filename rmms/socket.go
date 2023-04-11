@@ -5,6 +5,7 @@ import (
 	"log"
 	"mms/config"
 	"mms/response"
+	"time"
 )
 
 var (
@@ -14,10 +15,20 @@ var (
 	CmdDisconn string = "disconn"
 )
 
+const (
+	Normal      int = 0
+	Running     int = 1
+	Stop        int = 2
+	ConnectFail int = 3
+	StartFail   int = 4
+	OtherError  int = 99
+)
+
 // 对接收到的cmd指令，进行操作
 func (r *RmmsClient) ActionCmdSub(cmd []byte) {
 	var connectCmd config.ConnectCmd
 	var replyTopic = r.config.StompTopic.CmdReply
+	var statusTopic = r.config.StompTopic.StatusPush
 
 	// 解析接收到的数据
 	err := json.Unmarshal(cmd, &connectCmd)
@@ -33,6 +44,9 @@ func (r *RmmsClient) ActionCmdSub(cmd []byte) {
 	var encoderFrequency = connectCmd.Payload.DeviceSysParams.Lidarparameter.EncoderFrequency
 	var wheelCircumference = connectCmd.Payload.DeviceSysParams.Lidarparameter.WheelCircumference
 	var projectName = connectCmd.Payload.ProjectName
+	r.Param.Seq = connectCmd.Seq
+	r.Param.ProjectPath = connectCmd.Payload.ProjectInfo.Path
+	r.Param.TaskID = connectCmd.Payload.TaskID
 
 	// 判断module_name是否为3DLidar
 	if connectCmd.ModuleName != "3DLidar" {
@@ -66,6 +80,7 @@ func (r *RmmsClient) ActionCmdSub(cmd []byte) {
 
 		// 设置状态为conn,并发送回复
 		r.Param.Status = RmmsConn
+		r.Ws.Pubscribe(statusTopic, r.GenStatusResponse(Normal))
 		r.Ws.Pubscribe(replyTopic, response.Success.MarshalToBytes(connectCmd.Seq))
 	case CmdStart:
 		// 判断rmms的状态是否为conn
@@ -90,8 +105,11 @@ func (r *RmmsClient) ActionCmdSub(cmd []byte) {
 
 		// 设置状态为start,并发送回复
 		r.Param.Status = RmmsStart
+		r.Ws.Pubscribe(statusTopic, r.GenStatusResponse(Running))
+		go func() {
+			r.DataLoop()
+		}()
 		r.Ws.Pubscribe(replyTopic, response.Success.MarshalToBytes(connectCmd.Seq))
-
 	case CmdStop:
 		// 判断rmms的状态是否为start
 		if r.Param.Status != RmmsStart {
@@ -115,6 +133,7 @@ func (r *RmmsClient) ActionCmdSub(cmd []byte) {
 
 		// 设置状态为stop,并发送回复
 		r.Param.Status = RmmsStop
+		r.Ws.Pubscribe(statusTopic, r.GenStatusResponse(Stop))
 		r.Ws.Pubscribe(replyTopic, response.Success.MarshalToBytes(connectCmd.Seq))
 	case CmdDisconn:
 		// 判断rmms的状态是否为stop
@@ -129,7 +148,7 @@ func (r *RmmsClient) ActionCmdSub(cmd []byte) {
 			r.Ws.Pubscribe(replyTopic, err.MarshalToBytes(connectCmd.Seq))
 			return
 		}
-
+		r.Ws.Pubscribe(statusTopic, r.GenStatusResponse(Stop))
 	default:
 		log.Println("cmd错误")
 		r.Ws.Pubscribe(replyTopic, response.CmdError.MarshalToBytes(connectCmd.Seq))
@@ -147,4 +166,70 @@ func (r *RmmsClient) SubListen(data []byte) {
 		return
 	}
 	log.Printf("接收到的数据: %+v \r", cmd)
+}
+
+// 生成状态回复
+func (r *RmmsClient) GenStatusResponse(status int) (data []byte) {
+	var statusResponse = response.StatusResponse{
+		Seq:        r.Param.Seq,
+		ModuleName: "3DLidar",
+		State: response.State{
+			Status: status,
+		},
+	}
+	data, err := json.Marshal(statusResponse)
+	if err != nil {
+		log.Println(err)
+		return nil
+	}
+	return data
+}
+
+// 协程函数，用于定时发送数据，输入一个信号，用于控制协程函数的开关
+func (r *RmmsClient) DataLoop() {
+	// 定时发送数据
+	topic := r.config.StompTopic.DataPush
+	for {
+		if r.Param.Status == RmmsStart || r.Param.Status == RmmsStop {
+			r.Ws.Pubscribe(topic, r.GenDataResponse())
+			time.Sleep(1 * time.Second)
+		} else {
+			return
+		}
+	}
+
+}
+
+// 生成数据回复
+func (r *RmmsClient) GenDataResponse() (data []byte) {
+	var DAQCollectStatus, _ = r.QueryDAQCollectStatus()
+	var DAQFileSize, _ = r.QueryDAQFileSize()
+	var DAQCollectTime, _ = r.QueryDAQCollectTime()
+	var ScannerCollectStatus, _ = r.QueryScannerCollectStatus()
+	var FreeSpace, _ = r.QueryFreeSpace()
+	var LidarFileSizeMB, _ = r.QueryLidarFileSizeMB()
+	var GrayImage, DepthImage, _ = r.QueryGrayDepthImage()
+
+	var dataResponse = response.DataResponse{
+		Seq:        r.Param.Seq,
+		ModuleName: "3DLidar",
+		Data: response.Data{
+			DevicesValue: response.DevicesValue{
+				DAQCollectStatus:     DAQCollectStatus,
+				DAQFileSize:          DAQFileSize,
+				DAQCollectTime:       DAQCollectTime,
+				ScannerCollectStatus: ScannerCollectStatus,
+				FreeSpace:            FreeSpace,
+				LidarFileSizeMB:      LidarFileSizeMB,
+				GrayImage:            GrayImage,
+				DepthImage:           DepthImage,
+			},
+		},
+	}
+	data, err := json.Marshal(dataResponse)
+	if err != nil {
+		log.Println(err)
+		return nil
+	}
+	return data
 }
