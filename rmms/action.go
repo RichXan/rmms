@@ -2,6 +2,7 @@ package rmms
 
 import (
 	"fmt"
+	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -14,36 +15,34 @@ func (r *RmmsClient) sendCommand(port int, cmd string) ([]byte, error) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 
-	err := r.tc.Connect(tcp_ip, port)
-	if err != nil {
-		return nil, err
-	}
-
 	if cmd == "" {
-		r.close()
 		return nil, nil
 	}
 
 	bytes := []byte(cmd)
-	response, err := r.tc.Send(bytes)
+	response, err := r.tc.Send2Port(port, bytes)
 	if err != nil {
 		return nil, err
+	}
+
+	if string(response) == "$Err" {
+		return nil, fmt.Errorf("发送命令失败")
 	}
 
 	// TODO: check response
 	fmt.Println("response:", string(response))
 
-	r.close()
 	return response, nil
 }
 
 // 关闭连接
 func (r *RmmsClient) close() error {
-	return r.tc.Close()
+	return r.tc.CloseAllPortConn()
 }
 
 // 启动采集操控服务程序
 func (r *RmmsClient) action1StartServer() error {
+	// 发送消息
 	response, err := r.sendCommand(tcp_port_rmms, "$SCT,RMMSSERVER")
 	if err != nil {
 		// gps服务未启动，gps端口连接失败。
@@ -55,12 +54,49 @@ func (r *RmmsClient) action1StartServer() error {
 		return fmt.Errorf("发送启动采集操控服务程序指令失败")
 	}
 	fmt.Println("成功发送启动采集操控服务程序指令")
+
 	// 等待2分钟，等待扫描结束
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 	fmt.Println("等待2分钟，启动采集操控服务程序...")
 	time.Sleep(2 * time.Minute)
 	fmt.Println("等待结束")
+	return nil
+}
+
+func (r *RmmsClient) connAllTcpServer() error {
+	// 初始化连接tcp_port_daq端口
+	err := r.tc.InitConnPort(tcp_ip, tcp_port_daq)
+	if err != nil {
+		log.Println("初始化连接", tcp_port_daq, "端口失败！")
+		return err
+	}
+	fmt.Println("daq服务已启动")
+
+	// 初始化连接tcp_port_sync端口
+	err = r.tc.InitConnPort(tcp_ip, tcp_port_sync)
+	if err != nil {
+		log.Println("初始化连接", tcp_port_sync, "端口失败！")
+		return err
+	}
+	fmt.Println("sync服务已启动")
+
+	// 初始化连接tcp_port_scanner端口
+	err = r.tc.InitConnPort(tcp_ip, tcp_port_scanner)
+	if err != nil {
+		log.Println("初始化连接", tcp_port_scanner, "端口失败！")
+		return err
+	}
+	fmt.Println("scanner服务已启动")
+
+	// 初始化连接tcp_port_gps端口
+	err = r.tc.InitConnPort(tcp_ip, tcp_port_gps)
+	if err != nil {
+		log.Println("初始化连接", tcp_port_gps, "端口失败！")
+		return err
+	}
+	fmt.Println("gps服务已启动")
+
 	return nil
 }
 

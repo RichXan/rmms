@@ -5,9 +5,11 @@ import (
 	"log"
 	"mms/config"
 	"mms/response"
+	"runtime"
 	"time"
 )
 
+// 接收到的指令类型
 var (
 	CmdConn    string = "conn"
 	CmdStart   string = "start"
@@ -15,6 +17,7 @@ var (
 	CmdDisconn string = "disconn"
 )
 
+// 向前端发送的状态码
 const (
 	Normal      int = 0
 	Running     int = 1
@@ -26,7 +29,27 @@ const (
 
 // 对接收到的cmd指令，进行操作
 func (r *RmmsClient) ActionCmdSub(cmd []byte) {
-	var connectCmd config.ConnectCmd
+	// 捕获错误，防止宕机
+	defer func() {
+		// 发生宕机时，获取panic传递的上下文并打印
+		err := recover()
+		if err != nil {
+			switch err.(type) {
+			case runtime.Error: // 运行时错误
+				log.Println("runtime error:", err)
+			default: // 非运行时错误
+				log.Println("error:", err)
+			}
+		}
+	}()
+
+	// string 为json格式
+	log.Println("revicesd datas: ", string(cmd))
+	var nScanType, scanMode, encoderFrequency int
+	var wheelCircumference float64
+	var projectName = "hanni"
+	var connectCmd config.ConnectCMD
+	var startCmd config.StartCMD
 	var replyTopic = r.config.StompTopic.CmdReply
 	var statusTopic = r.config.StompTopic.StatusPush
 
@@ -38,21 +61,46 @@ func (r *RmmsClient) ActionCmdSub(cmd []byte) {
 		return
 	}
 
-	// 获取参数
-	var nScanType = connectCmd.Payload.DeviceSysParams.Lidarparameter.NScanType
-	var scanMode = connectCmd.Payload.DeviceSysParams.Lidarparameter.ScanMode
-	var encoderFrequency = connectCmd.Payload.DeviceSysParams.Lidarparameter.EncoderFrequency
-	var wheelCircumference = connectCmd.Payload.DeviceSysParams.Lidarparameter.WheelCircumference
-	var projectName = connectCmd.Payload.ProjectName
-	r.Param.Seq = connectCmd.Seq
-	r.Param.ProjectPath = connectCmd.Payload.ProjectInfo.Path
-	r.Param.TaskID = connectCmd.Payload.TaskID
-
-	// 判断module_name是否为3DLidar
-	if connectCmd.ModuleName != "3DLidar" {
-		log.Println("module_name错误，不为3DLidar")
-		r.Ws.Pubscribe(replyTopic, response.ModuleNameError.MarshalToBytes(connectCmd.Seq))
-		return
+	if connectCmd.Cmd == CmdConn {
+		err := json.Unmarshal(cmd, &connectCmd)
+		if err != nil {
+			log.Println(err)
+			r.Ws.Pubscribe(replyTopic, response.JsonUnmarshalError.MarshalToBytes(connectCmd.Seq))
+			return
+		}
+		nScanType = connectCmd.Payload.DeviceInfo.Lidar01.Property.Lidarparameter.NScanType
+		scanMode = connectCmd.Payload.DeviceInfo.Lidar01.Property.Lidarparameter.ScanMode
+		encoderFrequency = connectCmd.Payload.DeviceInfo.Lidar01.Property.Lidarparameter.EncoderFrequency
+		wheelCircumference = connectCmd.Payload.DeviceInfo.Lidar01.Property.Lidarparameter.WheelCircumference
+		r.Param.Seq = connectCmd.Seq
+		r.Param.ProjectPath = connectCmd.Payload.ProjectInfo.Path
+	} else if connectCmd.Cmd == CmdStart {
+		err := json.Unmarshal(cmd, &startCmd)
+		if err != nil {
+			log.Println(err)
+			r.Ws.Pubscribe(replyTopic, response.JsonUnmarshalError.MarshalToBytes(connectCmd.Seq))
+			return
+		}
+		r.Param.Seq = connectCmd.Seq
+		r.Param.TaskID = connectCmd.Payload.TaskID
+	} else if connectCmd.Cmd == CmdStop {
+		err := json.Unmarshal(cmd, &startCmd)
+		if err != nil {
+			log.Println(err)
+			r.Ws.Pubscribe(replyTopic, response.JsonUnmarshalError.MarshalToBytes(connectCmd.Seq))
+			return
+		}
+		r.Param.Seq = connectCmd.Seq
+		r.Param.TaskID = connectCmd.Payload.TaskID
+	} else if connectCmd.Cmd == CmdDisconn {
+		err := json.Unmarshal(cmd, &startCmd)
+		if err != nil {
+			log.Println(err)
+			r.Ws.Pubscribe(replyTopic, response.JsonUnmarshalError.MarshalToBytes(connectCmd.Seq))
+			return
+		}
+		r.Param.Seq = connectCmd.Seq
+		r.Param.ModuleName = connectCmd.ModuleName
 	}
 
 	// 项目保存路径
@@ -148,6 +196,8 @@ func (r *RmmsClient) ActionCmdSub(cmd []byte) {
 			r.Ws.Pubscribe(replyTopic, err.MarshalToBytes(connectCmd.Seq))
 			return
 		}
+		// 设置状态为stop,并发送回复
+		r.Param.Status = RmmsDisconn
 		r.Ws.Pubscribe(statusTopic, r.GenStatusResponse(Stop))
 	default:
 		log.Println("cmd错误")
@@ -189,9 +239,11 @@ func (r *RmmsClient) GenStatusResponse(status int) (data []byte) {
 func (r *RmmsClient) DataLoop() {
 	// 定时发送数据
 	topic := r.config.StompTopic.DataPush
+	diseaseTopic := r.config.StompTopic.DiseasePush
 	for {
-		if r.Param.Status == RmmsStart || r.Param.Status == RmmsStop {
+		if r.Param.Status == RmmsStart {
 			r.Ws.Pubscribe(topic, r.GenDataResponse())
+			r.Ws.Pubscribe(diseaseTopic, r.GenDiseaseRequestData())
 			time.Sleep(1 * time.Second)
 		} else {
 			return
@@ -208,7 +260,6 @@ func (r *RmmsClient) GenDataResponse() (data []byte) {
 	var ScannerCollectStatus, _ = r.QueryScannerCollectStatus()
 	var FreeSpace, _ = r.QueryFreeSpace()
 	var LidarFileSizeMB, _ = r.QueryLidarFileSizeMB()
-	var GrayImage, DepthImage, _ = r.QueryGrayDepthImage()
 
 	var dataResponse = response.DataResponse{
 		Seq:        r.Param.Seq,
@@ -221,8 +272,6 @@ func (r *RmmsClient) GenDataResponse() (data []byte) {
 				ScannerCollectStatus: ScannerCollectStatus,
 				FreeSpace:            FreeSpace,
 				LidarFileSizeMB:      LidarFileSizeMB,
-				GrayImage:            GrayImage,
-				DepthImage:           DepthImage,
 			},
 		},
 	}
@@ -231,5 +280,33 @@ func (r *RmmsClient) GenDataResponse() (data []byte) {
 		log.Println(err)
 		return nil
 	}
+
+	log.Printf("发送的数据: %+v \n", dataResponse)
+	return data
+}
+
+// 生成病害程序发送图片识别数据内容
+func (r *RmmsClient) GenDiseaseRequestData() (data []byte) {
+	var GrayImage, DepthImage, _ = r.QueryGrayDepthImage()
+	requestData := map[string]interface{}{
+		"seq":        r.Param.Seq,
+		"moduleName": "3DLidar",
+		"cmd":        "disease_seg",
+		"data": map[string]interface{}{
+			"project_path": r.Param.ProjectPath,
+			"taskID":       r.Param.TaskID,
+			"devicesvalue": map[string]interface{}{
+				"GrayImage":  GrayImage,
+				"DpethImage": DepthImage,
+			},
+		},
+	}
+	data, err := json.Marshal(requestData)
+	if err != nil {
+		log.Println(err)
+		return nil
+	}
+
+	log.Printf("发送的数据: %+v \n", requestData)
 	return data
 }

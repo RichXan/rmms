@@ -105,8 +105,9 @@ var (
 	SaveProjectError = NewResponse(90032, "保存工程失败")
 
 	// 执行disconnect操作时的错误
-	StatusDisconnError = NewResponse(90040, "当前的状态不允许执行断开操作")
-	CloseDeviceError   = NewResponse(90041, "关闭设备失败")
+	StatusDisconnError   = NewResponse(90040, "当前的状态不允许执行断开操作")
+	CloseDeviceError     = NewResponse(90041, "关闭设备失败")
+	CloseTCPConnectError = NewResponse(90042, "关闭tcp连接失败")
 	// 服务器错误
 	JsonMarshalError   = NewResponse(95001, "json序列化错误")
 	JsonUnmarshalError = NewResponse(95002, "json反序列化错误")

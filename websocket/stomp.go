@@ -73,7 +73,7 @@ func (ws *StompWS) stompWSConn(config *StompWSConfig) error {
 // #return      error       错误信息
 func (ws *StompWS) connect(host, port, name, passwd string) (*stomp.Conn, error) {
 	addr := fmt.Sprintf("%s:%s", host, port)
-	fmt.Printf("conn to addr:%s, name:%s, passwd:%s", addr, name, passwd)
+	fmt.Printf("conn to addr:%s, name:%s, passwd:%s \n", addr, name, passwd)
 
 	var options = []func(*stomp.Conn) error{
 		stomp.ConnOpt.Login(name, passwd),
@@ -138,7 +138,7 @@ func (ws *StompWS) Pubscribe(topic string, msg []byte) error {
 	}
 
 	// 打印日志
-	fmt.Printf("##### Publish topic: %s, msg: %s #####", topic, string(msg))
+	fmt.Printf("##### Publish topic: %s, msg: %s ##### \n", topic, string(msg))
 
 	err := ws.conn.Send(topic, "text/plain", msg)
 	if err != nil {

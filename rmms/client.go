@@ -71,6 +71,13 @@ func NewRmmsClient(config *config.GlobalConfig) *RmmsClient {
 
 // 启动服务，通过总控启动扫描采集服务程序
 func (r *RmmsClient) Action1_StartServer() *response.ReplyResponse {
+	// 初始化连接tcp_port_rmms端口
+	err := r.tc.InitConnPort(tcp_ip, tcp_port_rmms)
+	if err != nil {
+		log.Println("初始化连接", tcp_port_rmms, "端口失败！")
+		return response.ConnectServerError
+	}
+
 	if err := r.action1StartServer(); err != nil {
 		log.Println(err)
 		return response.StartServerError
@@ -90,6 +97,10 @@ func (r *RmmsClient) Action2_Connect(nScanType, scanMode,
 		return response.NScanTypeError
 	}
 
+	if err := r.connAllTcpServer(); err != nil {
+		log.Println(err)
+		return response.ConnectServerError
+	}
 	// 测试各服务状态
 	if err := r.actionTestAllServer(); err != nil {
 		log.Println(err)
@@ -321,6 +332,10 @@ func (r *RmmsClient) Action7_CloseDevice() *response.ReplyResponse {
 		return response.CloseDeviceError
 	}
 
+	if err := r.close(); err != nil {
+		log.Println("err:", err)
+		return response.CloseDeviceError
+	}
 	return nil
 }
 

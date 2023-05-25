@@ -14,7 +14,8 @@ import (
 func main() {
 	log.SetFlags(log.Lshortfile | log.LstdFlags)
 	// 读取yaml文件
-	config, err := readYamltoStruct()
+	filePath := "./config/global.yaml"
+	config, err := readYamltoStruct(filePath)
 	if err != nil {
 		fmt.Println("readYamltoStruct err:", err.Error())
 		panic(err)
@@ -117,12 +118,11 @@ func main() {
 // wg.Wait()
 
 // 读取yaml文件to struct
-func readYamltoStruct() (config.GlobalConfig, error) {
+func readYamltoStruct(filePath string) (config.GlobalConfig, error) {
 	var config config.GlobalConfig
-	file := "./config/global.yaml"
 
 	// 读取文件
-	f, err := ioutil.ReadFile(file)
+	f, err := ioutil.ReadFile(filePath)
 	if err != nil {
 		fmt.Println(err)
 		return config, err
