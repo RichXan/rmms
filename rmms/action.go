@@ -106,28 +106,24 @@ func (r *RmmsClient) actionTestAllServer() error {
 		// daq服务未启动，daq端口连接失败。
 		return err
 	}
-	fmt.Println("daq服务已启动")
 
 	_, err = r.sendCommand(tcp_port_sync, "")
 	if err != nil {
 		// sync服务未启动，sync端口连接失败。
 		return err
 	}
-	fmt.Println("sync服务已启动")
 
 	_, err = r.sendCommand(tcp_port_scanner, "")
 	if err != nil {
 		// scanner服务未启动，scanner端口连接失败。
 		return err
 	}
-	fmt.Println("scanner服务已启动")
 
 	_, err = r.sendCommand(tcp_port_gps, "")
 	if err != nil {
 		// gps服务未启动，gps端口连接失败。
 		return err
 	}
-	fmt.Println("gps服务已启动")
 	return nil
 }
 

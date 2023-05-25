@@ -2,10 +2,13 @@ package rmms
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"mms/config"
-	"mms/response"
+	"strings"
 	"runtime"
+	"mms/response"
+	// "runtime"
 	"time"
 )
 
@@ -36,15 +39,24 @@ func (r *RmmsClient) ActionCmdSub(cmd []byte) {
 		if err != nil {
 			switch err.(type) {
 			case runtime.Error: // 运行时错误
+				buf := make([]byte, 1<<16)
+				runtime.Stack(buf, true)
+				fmt.Println("buf", string(buf))
 				log.Println("runtime error:", err)
 			default: // 非运行时错误
+				buf := make([]byte, 1<<16)
+				runtime.Stack(buf, true)
+				fmt.Println("buf", string(buf))
 				log.Println("error:", err)
 			}
 		}
 	}()
 
 	// string 为json格式
+	log.Println("start #################################")
 	log.Println("revicesd datas: ", string(cmd))
+	log.Printf("r.Param: %+v", r.Param)
+	log.Println("end #################################")
 	var nScanType, scanMode, encoderFrequency int
 	var wheelCircumference float64
 	var projectName = "hanni"
@@ -126,13 +138,15 @@ func (r *RmmsClient) ActionCmdSub(cmd []byte) {
 			return
 		}
 
+		fmt.Printf("r.Param: %+v\n", r.Param)
+		fmt.Printf("connectCmd: %+v\n", connectCmd)
 		// 设置状态为conn,并发送回复
 		r.Param.Status = RmmsConn
 		r.Ws.Pubscribe(statusTopic, r.GenStatusResponse(Normal))
 		r.Ws.Pubscribe(replyTopic, response.Success.MarshalToBytes(connectCmd.Seq))
 	case CmdStart:
-		// 判断rmms的状态是否为conn
-		if r.Param.Status != RmmsConn {
+		// 判断rmms的状态是否为conn,stop
+		if !(r.Param.Status == RmmsConn || r.Param.Status == RmmsStop) {
 			r.Ws.Pubscribe(replyTopic, response.StatusStartError.MarshalToBytes(connectCmd.Seq))
 			return
 		}
@@ -150,6 +164,8 @@ func (r *RmmsClient) ActionCmdSub(cmd []byte) {
 			r.Ws.Pubscribe(replyTopic, err.MarshalToBytes(connectCmd.Seq))
 			return
 		}
+		fmt.Printf("r.Param: %+v\n", r.Param)
+		fmt.Printf("startCmd: %+v\n", startCmd)
 
 		// 设置状态为start,并发送回复
 		r.Param.Status = RmmsStart
@@ -172,13 +188,8 @@ func (r *RmmsClient) ActionCmdSub(cmd []byte) {
 			return
 		}
 
-		// 保存工程
-		if err := r.Action6_SaveProject(); err != nil {
-			log.Println(err)
-			r.Ws.Pubscribe(replyTopic, err.MarshalToBytes(connectCmd.Seq))
-			return
-		}
-
+		fmt.Printf("r.Param: %+v\n", r.Param)
+		fmt.Printf("startCmd: %+v\n", startCmd)
 		// 设置状态为stop,并发送回复
 		r.Param.Status = RmmsStop
 		r.Ws.Pubscribe(statusTopic, r.GenStatusResponse(Stop))
@@ -190,12 +201,22 @@ func (r *RmmsClient) ActionCmdSub(cmd []byte) {
 			return
 		}
 
+		// 保存工程
+		if err := r.Action6_SaveProject(); err != nil {
+			log.Println(err)
+			r.Ws.Pubscribe(replyTopic, err.MarshalToBytes(connectCmd.Seq))
+			return
+		}
+
 		// 断开连接
 		if err := r.Action7_CloseDevice(); err != nil {
 			log.Println(err)
 			r.Ws.Pubscribe(replyTopic, err.MarshalToBytes(connectCmd.Seq))
 			return
 		}
+
+		fmt.Printf("startCmd: %+v\n", startCmd)
+		fmt.Printf("r.Param: %+v\n", r.Param)
 		// 设置状态为stop,并发送回复
 		r.Param.Status = RmmsDisconn
 		r.Ws.Pubscribe(statusTopic, r.GenStatusResponse(Stop))
@@ -243,7 +264,12 @@ func (r *RmmsClient) DataLoop() {
 	for {
 		if r.Param.Status == RmmsStart {
 			r.Ws.Pubscribe(topic, r.GenDataResponse())
-			r.Ws.Pubscribe(diseaseTopic, r.GenDiseaseRequestData())
+
+			// 若有生成的图片数据，则发送
+			disease_data := r.GenDiseaseRequestData()
+			if  disease_data != nil {
+				r.Ws.Pubscribe(diseaseTopic, disease_data)
+			}
 			time.Sleep(1 * time.Second)
 		} else {
 			return
@@ -288,9 +314,19 @@ func (r *RmmsClient) GenDataResponse() (data []byte) {
 // 生成病害程序发送图片识别数据内容
 func (r *RmmsClient) GenDiseaseRequestData() (data []byte) {
 	var GrayImage, DepthImage, _ = r.QueryGrayDepthImage()
+	if GrayImage == "NoImg" || DepthImage == "NoImg"{
+		return nil
+	}
+
+	// 修改GrayImage和DepthImage的路径
+	// GrayImage = strings.Replace(GrayImage, "\\192.168.1.92\\data", "Z:\\", 1)
+	// DepthImage = strings.Replace(DepthImage, "\\192.168.1.92\\data", "Z:\\", 1)
+	GrayImage = strings.Replace(GrayImage, "\\", "\\\\", -1)
+	DepthImage = strings.Replace(DepthImage, "\\", "\\\\", -1)
+
 	requestData := map[string]interface{}{
 		"seq":        r.Param.Seq,
-		"moduleName": "3DLidar",
+		"module_name": "3DLidar",
 		"cmd":        "disease_seg",
 		"data": map[string]interface{}{
 			"project_path": r.Param.ProjectPath,

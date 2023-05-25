@@ -41,8 +41,8 @@ type DevicesValue struct {
 	ScannerCollectStatus string `json:"ScannerCollectStatus"`
 	FreeSpace            string `json:"FreeSpace"`
 	LidarFileSizeMB      string `json:"LidarFileSizeMB"`
-	GrayImage            string `json:"GrayImage"`
-	DepthImage           string `json:"DepthImage"`
+	// GrayImage            string `json:"GrayImage"`
+	// DepthImage           string `json:"DepthImage"`
 }
 
 var codes = map[int]string{}

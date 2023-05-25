@@ -12,7 +12,9 @@ type TcpClient struct {
 
 // 创建一个tcp客户端
 func NewTcpClient() *TcpClient {
-	return &TcpClient{}
+	return &TcpClient{
+		tcpConnect: make(map[int]net.Conn),
+	}
 }
 
 // 连接服务器
