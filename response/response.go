@@ -65,9 +65,30 @@ func (r *ReplyResponse) SetSeq(seq int) {
 }
 
 // 序列化
-func (r *ReplyResponse) MarshalToBytes(seq int) []byte {
+func (r *ReplyResponse) MarshalToBytes(seq int) []byte{
 	r.SetSeq(seq)
 	msg, err := json.Marshal(r)
+	if err != nil {
+		JsonMarshalError.SetSeq(seq)
+		msg, _ = json.Marshal(JsonMarshalError)
+		return msg
+	}
+	return msg
+}
+
+// 序列化成状态返回格式
+func (r *ReplyResponse) MarshalToStatusBytes(seq int) []byte {
+	resp := map[string]interface{}{
+		"seq":  seq,
+		"module_name": "3DLidar",
+		"state":  map[string]interface{}{
+			"Lidar01" : map[string]interface{}{
+				"status": r.Code,
+				"msg":   r.Msg,
+			},
+		},
+	}
+	msg, err := json.Marshal(resp)
 	if err != nil {
 		JsonMarshalError.SetSeq(seq)
 		msg, _ = json.Marshal(JsonMarshalError)

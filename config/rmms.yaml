@@ -4,8 +4,8 @@
 # 发布statusPush：主动向服务器推送状态消息
 
 stomp:
-  host: frp.sealan.tech
-  port: 21113
+  host: 192.168.120.99
+  port: 61613
   name: admin
   passwd: sealan
   timeout: 10

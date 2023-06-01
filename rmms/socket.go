@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log"
 	"mms/config"
-	"strings"
+	// "strings"
 	"runtime"
 	"mms/response"
 	// "runtime"
@@ -85,6 +85,7 @@ func (r *RmmsClient) ActionCmdSub(cmd []byte) {
 		encoderFrequency = connectCmd.Payload.DeviceInfo.Lidar01.Property.Lidarparameter.EncoderFrequency
 		wheelCircumference = connectCmd.Payload.DeviceInfo.Lidar01.Property.Lidarparameter.WheelCircumference
 		r.Param.Seq = connectCmd.Seq
+		// 项目保存路径
 		r.Param.ProjectPath = connectCmd.Payload.ProjectInfo.Path
 	} else if connectCmd.Cmd == CmdStart {
 		err := json.Unmarshal(cmd, &startCmd)
@@ -94,7 +95,10 @@ func (r *RmmsClient) ActionCmdSub(cmd []byte) {
 			return
 		}
 		r.Param.Seq = connectCmd.Seq
-		r.Param.TaskID = connectCmd.Payload.TaskID
+		taskID := connectCmd.Payload.TaskID
+		if taskID != "" {
+			r.Param.TaskID = taskID
+		}
 	} else if connectCmd.Cmd == CmdStop {
 		err := json.Unmarshal(cmd, &startCmd)
 		if err != nil {
@@ -103,7 +107,10 @@ func (r *RmmsClient) ActionCmdSub(cmd []byte) {
 			return
 		}
 		r.Param.Seq = connectCmd.Seq
-		r.Param.TaskID = connectCmd.Payload.TaskID
+		taskID := connectCmd.Payload.TaskID
+		if taskID != "" {
+			r.Param.TaskID = taskID
+		}
 	} else if connectCmd.Cmd == CmdDisconn {
 		err := json.Unmarshal(cmd, &startCmd)
 		if err != nil {
@@ -114,9 +121,6 @@ func (r *RmmsClient) ActionCmdSub(cmd []byte) {
 		r.Param.Seq = connectCmd.Seq
 		r.Param.ModuleName = connectCmd.ModuleName
 	}
-
-	// 项目保存路径
-	r.Param.ProjectPath = connectCmd.Payload.ProjectInfo.Path
 
 	switch connectCmd.Cmd {
 	case CmdConn:
@@ -267,7 +271,7 @@ func (r *RmmsClient) DataLoop() {
 
 			// 若有生成的图片数据，则发送
 			disease_data := r.GenDiseaseRequestData()
-			if  disease_data != nil {
+			if disease_data != nil {
 				r.Ws.Pubscribe(diseaseTopic, disease_data)
 			}
 			time.Sleep(1 * time.Second)
@@ -321,8 +325,8 @@ func (r *RmmsClient) GenDiseaseRequestData() (data []byte) {
 	// 修改GrayImage和DepthImage的路径
 	// GrayImage = strings.Replace(GrayImage, "\\192.168.1.92\\data", "Z:\\", 1)
 	// DepthImage = strings.Replace(DepthImage, "\\192.168.1.92\\data", "Z:\\", 1)
-	GrayImage = strings.Replace(GrayImage, "\\", "\\\\", -1)
-	DepthImage = strings.Replace(DepthImage, "\\", "\\\\", -1)
+	// GrayImage = strings.Replace(GrayImage, "\\", "\\\\", -1)
+	// DepthImage = strings.Replace(DepthImage, "\\", "\\\\", -1)
 
 	requestData := map[string]interface{}{
 		"seq":        r.Param.Seq,
@@ -333,7 +337,7 @@ func (r *RmmsClient) GenDiseaseRequestData() (data []byte) {
 			"taskID":       r.Param.TaskID,
 			"devicesvalue": map[string]interface{}{
 				"GrayImage":  GrayImage,
-				"DpethImage": DepthImage,
+				"DepthImage": DepthImage,
 			},
 		},
 	}
