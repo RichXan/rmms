@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"log"
 	"mms/config"
+
 	// "strings"
-	"runtime"
 	"mms/response"
+	"runtime"
+
 	// "runtime"
 	"time"
 )
@@ -22,12 +24,8 @@ var (
 
 // 向前端发送的状态码
 const (
-	Normal      int = 0
-	Running     int = 1
-	Stop        int = 2
-	ConnectFail int = 3
-	StartFail   int = 4
-	OtherError  int = 99
+	Normal     int = 0
+	OtherError int = 99
 )
 
 // 对接收到的cmd指令，进行操作
@@ -72,7 +70,7 @@ func (r *RmmsClient) ActionCmdSub(cmd []byte) {
 	err := json.Unmarshal(cmd, &connectCmd)
 	if err != nil {
 		log.Println(err)
-		r.Ws.Pubscribe(replyTopic, response.JsonUnmarshalError.MarshalToStatusBytes(seq, 0))
+		r.Ws.Pubscribe(replyTopic, response.JsonUnmarshalError.MarshalToCMDReplyBytes(seq, 0))
 		return
 	}
 
@@ -80,78 +78,88 @@ func (r *RmmsClient) ActionCmdSub(cmd []byte) {
 		err := json.Unmarshal(cmd, &connectCmd)
 		if err != nil {
 			log.Println(err)
-			r.Ws.Pubscribe(replyTopic, response.JsonUnmarshalError.MarshalToStatusBytes(seq, 0))
+			r.Ws.Pubscribe(replyTopic, response.JsonUnmarshalError.MarshalToCMDReplyBytes(seq, 0))
 			return
 		}
 		nScanType = connectCmd.Payload.DeviceInfo.Lidar01.Property.Lidarparameter.NScanType
 		scanMode = connectCmd.Payload.DeviceInfo.Lidar01.Property.Lidarparameter.ScanMode
 		encoderFrequency = connectCmd.Payload.DeviceInfo.Lidar01.Property.Lidarparameter.EncoderFrequency
 		wheelCircumference = connectCmd.Payload.DeviceInfo.Lidar01.Property.Lidarparameter.WheelCircumference
-		// 项目保存路径
-		r.Param.ProjectPath = connectCmd.Payload.ProjectInfo.Path
 	} else if connectCmd.Cmd == CmdStart {
 		err := json.Unmarshal(cmd, &startCmd)
 		if err != nil {
 			log.Println(err)
-			r.Ws.Pubscribe(replyTopic, response.JsonUnmarshalError.MarshalToStatusBytes(seq, 0))
+			r.Ws.Pubscribe(replyTopic, response.JsonUnmarshalError.MarshalToCMDReplyBytes(seq, 0))
 			return
-		}
-		taskID := connectCmd.Payload.TaskID
-		if taskID != "" {
-			r.Param.TaskID = taskID
 		}
 	} else if connectCmd.Cmd == CmdStop {
 		err := json.Unmarshal(cmd, &startCmd)
 		if err != nil {
 			log.Println(err)
-			r.Ws.Pubscribe(replyTopic, response.JsonUnmarshalError.MarshalToStatusBytes(seq, 0))
+			r.Ws.Pubscribe(replyTopic, response.JsonUnmarshalError.MarshalToCMDReplyBytes(seq, 0))
 			return
-		}
-		taskID := connectCmd.Payload.TaskID
-		if taskID != "" {
-			r.Param.TaskID = taskID
 		}
 	} else if connectCmd.Cmd == CmdDisconn {
 		err := json.Unmarshal(cmd, &startCmd)
 		if err != nil {
 			log.Println(err)
-			r.Ws.Pubscribe(replyTopic, response.JsonUnmarshalError.MarshalToStatusBytes(seq, 0))
+			r.Ws.Pubscribe(replyTopic, response.JsonUnmarshalError.MarshalToCMDReplyBytes(seq, 0))
 			return
 		}
-		r.Param.ModuleName = connectCmd.ModuleName
 	}
 
 	switch connectCmd.Cmd {
 	case CmdConn:
-		// 判断rmms的状态是否为disconn
-		if r.Param.Status != RmmsDisconn {
-			log.Println("当前的状态为："+ r.Param.Status + "不允许执行连接操作")
-			r.Ws.Pubscribe(replyTopic, response.StatusConnError.MarshalToStatusBytes(seq, 0))
+		// 项目保存路径
+		r.Param.ProjectPath = connectCmd.Payload.ProjectInfo.Path
+
+		if r.Param.Status == RmmsConn {
+			log.Println("设备已经连接")
+			r.Ws.Pubscribe(replyTopic, response.AlreadyConnError.MarshalToCMDReplyBytes(seq, 0))
+			r.Ws.Pubscribe(statusTopic, r.GenStatusResponse(Normal))
 			return
 		}
 
+		if r.Param.Status == RmmsConnecting {
+			log.Println("设备正在连接")
+			r.Ws.Pubscribe(replyTopic, response.IsConnectingError.MarshalToCMDReplyBytes(seq, 0))
+			r.Ws.Pubscribe(statusTopic, r.GenStatusResponse(Normal))
+			return
+		}
+
+		// 判断rmms的状态是否为disconn
+		if r.Param.Status != RmmsDisconn {
+			log.Println("当前的状态为：", r.Param.Status, "不允许执行连接操作")
+			r.Ws.Pubscribe(replyTopic, response.StatusConnError.MarshalToCMDReplyBytes(seq, 0))
+			return
+		}
+
+		// 进入连接状态
+		r.Param.Status = RmmsConnecting
+		r.Ws.Pubscribe(statusTopic, r.GenStatusResponse(Normal))
+
 		// 连接
 		if err := r.Action2_Connect(nScanType, scanMode, encoderFrequency, wheelCircumference); err != nil {
-			r.Ws.Pubscribe(replyTopic, response.StartServerError.MarshalToStatusBytes(seq, 0))
+			r.Ws.Pubscribe(replyTopic, response.StartServerError.MarshalToCMDReplyBytes(seq, 0))
 			return
 		}
 
 		// 新建工程
 		if err := r.Action3_NewProject(projectName); err != nil {
 			log.Println(err)
-			r.Ws.Pubscribe(replyTopic, err.MarshalToStatusBytes(seq, 0))
+			r.Ws.Pubscribe(replyTopic, err.MarshalToCMDReplyBytes(seq, 0))
 			return
 		}
 
 		daqStatus, _ := r.queryDAQCollectStatus()
-		scannerStatus, _ := queryScannerCollectStatus()
+		scannerStatus, _ := r.queryScannerCollectStatus()
 
 		// 判断是否需要启动扫描采集服务程序
 		if daqStatus != "1" || scannerStatus != "1" {
 			// 开始测站扫描
 			if err := r.Action4_StartStation(); err != nil {
 				log.Println(err)
-				r.Ws.Pubscribe(replyTopic, err.MarshalToStatusBytes(seq, 0))
+				r.Ws.Pubscribe(replyTopic, err.MarshalToCMDReplyBytes(seq, 0))
 				return
 			}
 		}
@@ -159,71 +167,114 @@ func (r *RmmsClient) ActionCmdSub(cmd []byte) {
 		// 设置状态为conn,并发送回复
 		r.Param.Status = RmmsConn
 		r.Ws.Pubscribe(statusTopic, r.GenStatusResponse(Normal))
-		r.Ws.Pubscribe(replyTopic, response.Success.MarshalToStatusBytes(seq, 0))
+		r.Ws.Pubscribe(replyTopic, response.Success.MarshalToCMDReplyBytes(seq, 0))
 	case CmdStart:
+		if r.Param.Status == RmmsStart {
+			log.Println("设备已经启动")
+			r.Ws.Pubscribe(replyTopic, response.AlreadyStartError.MarshalToCMDReplyBytes(seq, 0))
+			r.Ws.Pubscribe(statusTopic, r.GenStatusResponse(Normal))
+			return
+		}
+
 		// 判断rmms的状态是否为conn,stop
 		if !(r.Param.Status == RmmsConn || r.Param.Status == RmmsStop) {
-			log.Println("当前的状态为："+ r.Param.Status + "不允许执行启动操作")
-			r.Ws.Pubscribe(replyTopic, response.StatusStartError.MarshalToStatusBytes(seq, 0))
+			log.Println("当前的状态为：", r.Param.Status, "不允许执行启动操作")
+			r.Ws.Pubscribe(replyTopic, response.StatusStartError.MarshalToCMDReplyBytes(seq, 0))
 			return
+		}
+
+		// 保存taskID
+		taskID := connectCmd.Payload.TaskID
+		if taskID != "" {
+			r.Param.TaskID = taskID
 		}
 
 		// 设置状态为start,并发送回复
 		r.Param.Status = RmmsStart
-		r.Ws.Pubscribe(statusTopic, r.GenStatusResponse(Running))
+		r.Ws.Pubscribe(statusTopic, r.GenStatusResponse(Normal))
 		go func() {
 			r.DataLoop()
 		}()
-		r.Ws.Pubscribe(replyTopic, response.Success.MarshalToStatusBytes(seq, 0))
+		r.Ws.Pubscribe(replyTopic, response.Success.MarshalToCMDReplyBytes(seq, 0))
 	case CmdStop:
+		if r.Param.Status == RmmsStop {
+			log.Println("设备已经停止")
+			r.Ws.Pubscribe(replyTopic, response.AlreadyStopError.MarshalToCMDReplyBytes(seq, 0))
+			r.Ws.Pubscribe(statusTopic, r.GenStatusResponse(Normal))
+			return
+		}
+
 		// 判断rmms的状态是否为start
 		if r.Param.Status != RmmsStart {
-			log.Println("当前的状态为："+ r.Param.Status + "不允许执行停止操作")
-			r.Ws.Pubscribe(replyTopic, response.StatusStopError.MarshalToStatusBytes(seq, 0))
+			log.Println("当前的状态为：", r.Param.Status, "不允许执行停止操作")
+			r.Ws.Pubscribe(replyTopic, response.StatusStopError.MarshalToCMDReplyBytes(seq, 0))
 			return
+		}
+
+		// 保存taskID
+		taskID := connectCmd.Payload.TaskID
+		if taskID != "" {
+			r.Param.TaskID = taskID
 		}
 
 		// 设置状态为stop,并发送回复
 		r.Param.Status = RmmsStop
-		r.Ws.Pubscribe(statusTopic, r.GenStatusResponse(Stop))
-		r.Ws.Pubscribe(replyTopic, response.Success.MarshalToStatusBytes(seq, 0))
+		r.Ws.Pubscribe(statusTopic, r.GenStatusResponse(Normal))
+		r.Ws.Pubscribe(replyTopic, response.Success.MarshalToCMDReplyBytes(seq, 0))
 	case CmdDisconn:
-		// 判断rmms的状态是否为conn或者stop
-		if r.Param.Status != RmmsConn && r.Param.Status != RmmsStop {
-			log.Println("当前的状态为："+ r.Param.Status + "不允许执行断开连接操作")
-			r.Ws.Pubscribe(replyTopic, response.StatusDisconnError.MarshalToStatusBytes(seq, 0))
+		if r.Param.Status == RmmsDisconn {
+			log.Println("设备已经断开")
+			r.Ws.Pubscribe(replyTopic, response.AlreadyDisconnError.MarshalToCMDReplyBytes(seq, 0))
+			r.Ws.Pubscribe(statusTopic, r.GenStatusResponse(Normal))
 			return
 		}
 
-		// 停止测站扫描
-		if err := r.Action5_StopStation(); err != nil {
-			log.Println(err)
-			r.Ws.Pubscribe(replyTopic, err.MarshalToStatusBytes(seq, 0))
+		if r.Param.Status == RmmsDisconnecting {
+			log.Println("设备正在断开")
+			r.Ws.Pubscribe(replyTopic, response.IsDisconnectingError.MarshalToCMDReplyBytes(seq, 0))
+			r.Ws.Pubscribe(statusTopic, r.GenStatusResponse(Normal))
 			return
 		}
 
-		// 保存工程
-		if err := r.Action6_SaveProject(); err != nil {
-			log.Println(err)
-			r.Ws.Pubscribe(replyTopic, err.MarshalToStatusBytes(seq, 0))
+		// 只有在conn或者stop状态下，才可以执行断开连接操作
+		if r.Param.Status == RmmsConn || r.Param.Status == RmmsStop {
+			// 进入连接状态
+			r.Param.Status = RmmsDisconnecting
+			// 停止测站扫描
+			if err := r.Action5_StopStation(); err != nil {
+				log.Println(err)
+				r.Ws.Pubscribe(replyTopic, err.MarshalToCMDReplyBytes(seq, 0))
+				return
+			}
+
+			// 保存工程
+			if err := r.Action6_SaveProject(); err != nil {
+				log.Println(err)
+				r.Ws.Pubscribe(replyTopic, err.MarshalToCMDReplyBytes(seq, 0))
+				return
+			}
+
+			// 断开连接
+			if err := r.Action7_CloseDevice(); err != nil {
+				log.Println(err)
+				r.Ws.Pubscribe(replyTopic, err.MarshalToCMDReplyBytes(seq, 0))
+				return
+			}
+
+			fmt.Printf("startCmd: %+v\n", startCmd)
+			fmt.Printf("r.Param: %+v\n", r.Param)
+			// 设置状态为stop,并发送回复
+			r.Param.Status = RmmsDisconn
+			r.Ws.Pubscribe(statusTopic, r.GenStatusResponse(Normal))
 			return
 		}
 
-		// 断开连接
-		if err := r.Action7_CloseDevice(); err != nil {
-			log.Println(err)
-			r.Ws.Pubscribe(replyTopic, err.MarshalToStatusBytes(seq, 0))
-			return
-		}
+		log.Println("当前的状态为：", r.Param.Status, "不允许执行断开连接操作")
+		r.Ws.Pubscribe(replyTopic, response.StatusDisconnError.MarshalToCMDReplyBytes(seq, 0))
 
-		fmt.Printf("startCmd: %+v\n", startCmd)
-		fmt.Printf("r.Param: %+v\n", r.Param)
-		// 设置状态为stop,并发送回复
-		r.Param.Status = RmmsDisconn
-		r.Ws.Pubscribe(statusTopic, r.GenStatusResponse(Stop))
 	default:
 		log.Println("cmd错误")
-		r.Ws.Pubscribe(replyTopic, response.CmdError.MarshalToStatusBytes(seq, 0))
+		r.Ws.Pubscribe(replyTopic, response.CmdError.MarshalToCMDReplyBytes(seq, 0))
 	}
 }
 
@@ -245,8 +296,8 @@ func (r *RmmsClient) GenStatusResponse(status int) (data []byte) {
 	var statusResponse = response.StatusResponse{
 		Seq:        r.Param.Seq,
 		ModuleName: "3DLidar",
-		State: response.State{
-			Status: status,
+		State: map[string]interface{}{
+			"Lidar01": status,
 		},
 	}
 	data, err := json.Marshal(statusResponse)
@@ -315,7 +366,7 @@ func (r *RmmsClient) GenDataResponse() (data []byte) {
 // 生成病害程序发送图片识别数据内容
 func (r *RmmsClient) GenDiseaseRequestData() (data []byte) {
 	var GrayImage, DepthImage, _ = r.QueryGrayDepthImage()
-	if GrayImage == "NoImg" || DepthImage == "NoImg"{
+	if GrayImage == "NoImg" || DepthImage == "NoImg" {
 		return nil
 	}
 
@@ -332,9 +383,9 @@ func (r *RmmsClient) GenDiseaseRequestData() (data []byte) {
 	// DepthImage = strings.Replace(DepthImage, "\\", "\\\\", -1)
 
 	requestData := map[string]interface{}{
-		"seq":        r.Param.Seq,
+		"seq":         r.Param.Seq,
 		"module_name": "3DLidar",
-		"cmd":        "disease_seg",
+		"cmd":         "disease_seg",
 		"data": map[string]interface{}{
 			"project_path": r.Param.ProjectPath,
 			"taskID":       r.Param.TaskID,

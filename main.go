@@ -22,10 +22,10 @@ func main() {
 	}
 
 	client := rmms.NewRmmsClient(&config)
-	
+
 	// 启动服务
 	if respErr := client.Action1_StartServer(); respErr != nil {
-		client.Ws.Pubscribe(config.StompTopic.StatusPush, respErr.MarshalToStatusBytes(0,0))
+		client.Ws.Pubscribe(config.StompTopic.CmdReply, respErr.MarshalToCMDReplyBytes(0, 0))
 		fmt.Println("启动服务失败: ", respErr.Msg)
 	}
 	// 监听服务器发送的cmd指令
@@ -35,7 +35,7 @@ func main() {
 	// client.Ws.AddSub("/topic/data.disease.error", print_sub_msg_error)
 	// client.Ws.AddSub("/topic/data.push", print_sub_msg_data_push)
 	// client.Ws.AddSub(config.StompTopic.DiseasePush, print_sub_msg_disease)
-	
+
 	client.Ws.WebsocketStart()
 
 	for {

@@ -32,21 +32,21 @@ type RmmsStatus int
 
 const (
 	RmmsDisconn RmmsStatus = iota
-	// RmmsConnecting
 	RmmsConn
 	RmmsStart
-	// RmmsStopping
 	RmmsStop
+	RmmsConnecting
+	RmmsDisconnecting
 )
 
 type RmmsParam struct {
-	Seq         int        // 序列号
-	Status      RmmsStatus // 状态
-	TaskID      string     // 任务ID
-	ProjectPath string     // 项目路径
-	ModuleName  string     // 模块名称
-	LastDepthImage string  // 上一张深度图
-	LastGrayImage string   // 上一张灰度图
+	Seq            int        // 序列号
+	Status         RmmsStatus // 状态
+	TaskID         string     // 任务ID
+	ProjectPath    string     // 项目路径
+	ModuleName     string     // 模块名称
+	LastDepthImage string     // 上一张深度图
+	LastGrayImage  string     // 上一张灰度图
 }
 
 type RmmsClient struct {
@@ -67,10 +67,10 @@ func NewRmmsClient(config *config.GlobalConfig) *RmmsClient {
 		Ws:     ws,
 		config: config,
 		Param: &RmmsParam{
-			Status:     RmmsDisconn,
-			ModuleName: "3DLidar",
+			Status:         RmmsDisconn,
+			ModuleName:     "3DLidar",
 			LastDepthImage: "",
-			LastGrayImage: "",
+			LastGrayImage:  "",
 		},
 	}
 }
@@ -82,7 +82,7 @@ func (r *RmmsClient) Action1_StartServer() *response.ReplyResponse {
 		log.Println("初始化连接", tcp_port_rmms, "端口失败！")
 		return response.ConnectServerError
 	}
-	
+
 	// 启动服务
 	if err := r.action1StartServer(); err != nil {
 		log.Println(err)
@@ -95,13 +95,13 @@ func (r *RmmsClient) Action1_StartServer() *response.ReplyResponse {
 	fmt.Println("启动采集操控服务程序...")
 	for i := 0; i+5 < 15; i++ {
 		// 上报设备状态
-		r.Ws.Pubscribe(r.config.StompTopic.StatusPush,
-			response.WaitForConnReply.MarshalToStatusBytes(r.Param.Seq, 15-i))
+		r.Ws.Pubscribe(r.config.StompTopic.CmdReply,
+			response.WaitForConnReply.MarshalToCMDReplyBytes(r.Param.Seq, 15-i))
 		fmt.Printf("waitting %d seconds...\n", 15-i)
 		time.Sleep(1 * time.Second)
 	}
 	fmt.Println("启动采集操控服务程序成功！")
-	
+
 	if err := r.connAllTcpServer(); err != nil {
 		log.Println(err)
 		return response.ConnectServerError
@@ -109,12 +109,12 @@ func (r *RmmsClient) Action1_StartServer() *response.ReplyResponse {
 
 	for i := 10; i < 15; i++ {
 		// 上报设备状态
-		r.Ws.Pubscribe(r.config.StompTopic.StatusPush,
-			response.WaitForConnReply.MarshalToStatusBytes(r.Param.Seq, 15-i))
+		r.Ws.Pubscribe(r.config.StompTopic.CmdReply,
+			response.WaitForConnReply.MarshalToCMDReplyBytes(r.Param.Seq, 15-i))
 		fmt.Printf("waitting %d seconds...\n", 15-i)
 		time.Sleep(1 * time.Second)
 	}
-	
+
 	r.Ws.Pubscribe(r.config.StompTopic.StatusPush, r.GenStatusResponse(Normal))
 	fmt.Println("连接子tcp服务成功！")
 	return nil
@@ -238,10 +238,10 @@ func (r *RmmsClient) Action3_NewProject(projectName string) *response.ReplyRespo
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 	fmt.Println("正在启动惯导检测，等待5分钟...")
-	for i := 0; i < 300 ; i++ {
-		r.Ws.Pubscribe(r.config.StompTopic.StatusPush,
-			response.WaitForStartReply.MarshalToStatusBytes(r.Param.Seq, 300-i))
-		fmt.Printf("waitting %d seconds...\n" ,300-i)
+	for i := 0; i < 300; i++ {
+		r.Ws.Pubscribe(r.config.StompTopic.CmdReply,
+			response.WaitForStartReply.MarshalToCMDReplyBytes(r.Param.Seq, 300-i))
+		fmt.Printf("waitting %d seconds...\n", 300-i)
 		time.Sleep(1 * time.Second)
 	}
 	fmt.Println("惯导检测完毕，可以开始测站")
@@ -292,10 +292,10 @@ func (r *RmmsClient) Action4_StartStation() *response.ReplyResponse {
 	fmt.Println("正在启动测站扫描，等待90秒")
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
-	for i := 0; i < 90 ; i++ {
-		r.Ws.Pubscribe(r.config.StompTopic.StatusPush,
-			response.WaitForStartReply.MarshalToStatusBytes(r.Param.Seq, 90-i))
-		fmt.Printf("waitting %d seconds...\n" ,90-i)
+	for i := 0; i < 90; i++ {
+		r.Ws.Pubscribe(r.config.StompTopic.CmdReply,
+			response.WaitForStartReply.MarshalToCMDReplyBytes(r.Param.Seq, 90-i))
+		fmt.Printf("waitting %d seconds...\n", 90-i)
 		time.Sleep(1 * time.Second)
 	}
 	fmt.Println("测站扫描启动完毕")
@@ -319,10 +319,10 @@ func (r *RmmsClient) Action5_StopStation() *response.ReplyResponse {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 	fmt.Println("正在停止测站扫描，等待五分钟...")
-	for i := 0; i < 300 ; i++ {
-		r.Ws.Pubscribe(r.config.StompTopic.StatusPush,
-			response.WaitForStopReply.MarshalToStatusBytes(r.Param.Seq, 300-i))
-		fmt.Printf("waitting %d seconds...\n" , 300-i)
+	for i := 0; i < 300; i++ {
+		r.Ws.Pubscribe(r.config.StompTopic.CmdReply,
+			response.WaitForStopReply.MarshalToCMDReplyBytes(r.Param.Seq, 300-i))
+		fmt.Printf("waitting %d seconds...\n", 300-i)
 		time.Sleep(1 * time.Second)
 	}
 	fmt.Println("测站扫描停止完毕")
@@ -348,10 +348,10 @@ func (r *RmmsClient) Action6_SaveProject() *response.ReplyResponse {
 	}
 
 	fmt.Println("正在停止扫描仪转动，等待45秒...")
-	for i := 0; i < 45 ; i++ {
-		r.Ws.Pubscribe(r.config.StompTopic.StatusPush,
-			response.WaitForStopReply.MarshalToStatusBytes(r.Param.Seq, 45-i))
-		fmt.Printf("waitting %d seconds...\n" ,45-i)
+	for i := 0; i < 45; i++ {
+		r.Ws.Pubscribe(r.config.StompTopic.CmdReply,
+			response.WaitForStopReply.MarshalToCMDReplyBytes(r.Param.Seq, 45-i))
+		fmt.Printf("waitting %d seconds...\n", 45-i)
 		time.Sleep(1 * time.Second)
 	}
 
