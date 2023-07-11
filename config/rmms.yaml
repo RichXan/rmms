@@ -1,5 +1,4 @@
 # 订阅cmdSub：服务器发送过来的控制指令，做出相应操作
-# 发布cmdReply：对相应控制指令操作结束后，对控制消息回复
 # 发布dataPush：主动向服务器推送数据消息
 # 发布statusPush：主动向服务器推送状态消息
 
@@ -13,8 +12,8 @@ stomp:
 topic:
   moduleName: 3DLidar
   cmdSub: /topic/cmd.3DLidar.post
-  cmdReply: /topic/cmd.reply
   dataPush: /topic/data.push
+  cmdReply: /topic/cmd.reply
   statusPush: /topic/status.push
   diseasePush: /topic/data.disease.pic
 

@@ -5,7 +5,6 @@ import (
 	"log"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/axgle/mahonia" //编码转换
 )
@@ -53,14 +52,7 @@ func (r *RmmsClient) action1StartServer() error {
 	if string(response) != "$OK" {
 		return fmt.Errorf("发送启动采集操控服务程序指令失败")
 	}
-	fmt.Println("成功发送启动采集操控服务程序指令")
 
-	// 等待2分钟，等待扫描结束
-	r.mutex.Lock()
-	defer r.mutex.Unlock()
-	fmt.Println("等待2分钟，启动采集操控服务程序...")
-	time.Sleep(2 * time.Minute)
-	fmt.Println("等待结束")
 	return nil
 }
 
@@ -300,7 +292,7 @@ func (r *RmmsClient) action4StartScanner(time string) error {
 }
 
 // 停止扫描
-func (r *RmmsClient) action5StopScan() error {
+func (r *RmmsClient) action6StopScan() error {
 	response, err := r.sendCommand(tcp_port_scanner, "$STG")
 	if err != nil {
 		return err
@@ -316,7 +308,7 @@ func (r *RmmsClient) action5StopScan() error {
 }
 
 // 停止惯导 工程采集
-func (r *RmmsClient) action6StopCollect() error {
+func (r *RmmsClient) action5StopCollect() error {
 	response, err := r.sendCommand(tcp_port_daq, "$STG")
 	if err != nil {
 		return err

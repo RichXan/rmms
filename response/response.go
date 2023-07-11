@@ -77,15 +77,13 @@ func (r *ReplyResponse) MarshalToBytes(seq int) []byte{
 }
 
 // 序列化成状态返回格式
-func (r *ReplyResponse) MarshalToStatusBytes(seq int) []byte {
+func (r *ReplyResponse) MarshalToStatusBytes(seq int, countdown int) []byte {
 	resp := map[string]interface{}{
 		"seq":  seq,
 		"module_name": "3DLidar",
 		"state":  map[string]interface{}{
-			"Lidar01" : map[string]interface{}{
-				"status": r.Code,
-				"msg":   r.Msg,
-			},
+			"Lidar01" : r.Code,
+			"countdown": countdown,
 		},
 	}
 	msg, err := json.Marshal(resp)
@@ -134,7 +132,7 @@ var (
 	JsonUnmarshalError = NewResponse(95002, "json反序列化错误")
 
 	// 执行中，等待的回复
-	WaitForConnReply    = NewResponse(70001, "启动操控服务程序，连接服务中...")
+	WaitForConnReply    = NewResponse(70001, "启动操控服务程序，连接tcp服务中...")
 	WaitForStartReply   = NewResponse(70002, "激光雷达惯导检测中...")
 	WaitForStopReply    = NewResponse(70003, "停止测站扫描并保存工程中...")
 	WaitForDisconnReply = NewResponse(70004, "关闭设备，断开连接中...")

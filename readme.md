@@ -19,6 +19,12 @@
     "project_path": "path",
     "taskID": "id",
     "devicesvalue": {
+      "DAQCollectStatus": "0",
+      "DAQFileSize": "100M",
+      "DAQCollectTime": "100s",
+      "ScannerCollectStatus": "0",
+      "FreeSpace": "1G",
+      "LidarFileSizeMB": "1024M",
       "GrayImage": "path",
       "DepthImage": "path"
     }

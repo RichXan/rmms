@@ -32,8 +32,10 @@ type RmmsStatus int
 
 const (
 	RmmsDisconn RmmsStatus = iota
+	// RmmsConnecting
 	RmmsConn
 	RmmsStart
+	// RmmsStopping
 	RmmsStop
 )
 
@@ -43,6 +45,8 @@ type RmmsParam struct {
 	TaskID      string     // 任务ID
 	ProjectPath string     // 项目路径
 	ModuleName  string     // 模块名称
+	LastDepthImage string  // 上一张深度图
+	LastGrayImage string   // 上一张灰度图
 }
 
 type RmmsClient struct {
@@ -65,6 +69,8 @@ func NewRmmsClient(config *config.GlobalConfig) *RmmsClient {
 		Param: &RmmsParam{
 			Status:     RmmsDisconn,
 			ModuleName: "3DLidar",
+			LastDepthImage: "",
+			LastGrayImage: "",
 		},
 	}
 }
@@ -72,21 +78,45 @@ func NewRmmsClient(config *config.GlobalConfig) *RmmsClient {
 // 启动服务，通过总控启动扫描采集服务程序
 func (r *RmmsClient) Action1_StartServer() *response.ReplyResponse {
 	// 初始化连接tcp_port_rmms端口
-	err := r.tc.InitConnPort(tcp_ip, tcp_port_rmms)
-	if err != nil {
+	if err := r.tc.InitConnPort(tcp_ip, tcp_port_rmms); err != nil {
 		log.Println("初始化连接", tcp_port_rmms, "端口失败！")
 		return response.ConnectServerError
 	}
-
+	
+	// 启动服务
 	if err := r.action1StartServer(); err != nil {
 		log.Println(err)
 		return response.StartServerError
 	}
 
-	r.Ws.Pubscribe(r.config.StompTopic.CmdReply,
-		response.WaitForConnReply.MarshalToBytes(r.Param.Seq))
-	// 等待十秒
-	time.Sleep(10 * time.Second)
+	// 等待15秒，等待服务程序启动，连接子设备
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+	fmt.Println("启动采集操控服务程序...")
+	for i := 0; i+5 < 15; i++ {
+		// 上报设备状态
+		r.Ws.Pubscribe(r.config.StompTopic.StatusPush,
+			response.WaitForConnReply.MarshalToStatusBytes(r.Param.Seq, 15-i))
+		fmt.Printf("waitting %d seconds...\n", 15-i)
+		time.Sleep(1 * time.Second)
+	}
+	fmt.Println("启动采集操控服务程序成功！")
+	
+	if err := r.connAllTcpServer(); err != nil {
+		log.Println(err)
+		return response.ConnectServerError
+	}
+
+	for i := 10; i < 15; i++ {
+		// 上报设备状态
+		r.Ws.Pubscribe(r.config.StompTopic.StatusPush,
+			response.WaitForConnReply.MarshalToStatusBytes(r.Param.Seq, 15-i))
+		fmt.Printf("waitting %d seconds...\n", 15-i)
+		time.Sleep(1 * time.Second)
+	}
+	
+	r.Ws.Pubscribe(r.config.StompTopic.StatusPush, r.GenStatusResponse(Normal))
+	fmt.Println("连接子tcp服务成功！")
 	return nil
 }
 
@@ -97,10 +127,6 @@ func (r *RmmsClient) Action2_Connect(nScanType, scanMode,
 		return response.NScanTypeError
 	}
 
-	if err := r.connAllTcpServer(); err != nil {
-		log.Println(err)
-		return response.ConnectServerError
-	}
 	// 测试各服务状态
 	if err := r.actionTestAllServer(); err != nil {
 		log.Println(err)
@@ -208,13 +234,16 @@ func (r *RmmsClient) Action3_NewProject(projectName string) *response.ReplyRespo
 		return response.NewProjectError
 	}
 
-	r.Ws.Pubscribe(r.config.StompTopic.CmdReply,
-		response.WaitForStartReply.MarshalToBytes(r.Param.Seq))
 	// 占用锁，等待五分钟
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 	fmt.Println("正在启动惯导检测，等待5分钟...")
-	time.Sleep(5 * time.Minute)
+	for i := 0; i < 300 ; i++ {
+		r.Ws.Pubscribe(r.config.StompTopic.StatusPush,
+			response.WaitForStartReply.MarshalToStatusBytes(r.Param.Seq, 300-i))
+		fmt.Printf("waitting %d seconds...\n" ,300-i)
+		time.Sleep(1 * time.Second)
+	}
 	fmt.Println("惯导检测完毕，可以开始测站")
 	return nil
 }
@@ -259,13 +288,17 @@ func (r *RmmsClient) Action4_StartStation() *response.ReplyResponse {
 		return response.StartScannerError
 	}
 
-	r.Ws.Pubscribe(r.config.StompTopic.CmdReply,
-		response.WaitForStartReply.MarshalToBytes(r.Param.Seq))
 	// 占用锁，等待90秒
 	fmt.Println("正在启动测站扫描，等待90秒")
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
-	time.Sleep(90 * time.Second)
+	for i := 0; i < 90 ; i++ {
+		r.Ws.Pubscribe(r.config.StompTopic.StatusPush,
+			response.WaitForStartReply.MarshalToStatusBytes(r.Param.Seq, 90-i))
+		fmt.Printf("waitting %d seconds...\n" ,90-i)
+		time.Sleep(1 * time.Second)
+	}
+	fmt.Println("测站扫描启动完毕")
 	return nil
 }
 
@@ -277,18 +310,21 @@ func (r *RmmsClient) Action5_StopStation() *response.ReplyResponse {
 		return response.StopStationError
 	}
 
-	if err := r.action5StopScan(); err != nil {
+	if err := r.action5StopCollect(); err != nil {
 		log.Println("err:", err)
 		return response.StopStationError
 	}
 
-	r.Ws.Pubscribe(r.config.StompTopic.CmdReply,
-		response.WaitForStopReply.MarshalToBytes(r.Param.Seq))
 	// 占用锁，等待五分钟
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 	fmt.Println("正在停止测站扫描，等待五分钟...")
-	time.Sleep(5 * time.Minute)
+	for i := 0; i < 300 ; i++ {
+		r.Ws.Pubscribe(r.config.StompTopic.StatusPush,
+			response.WaitForStopReply.MarshalToStatusBytes(r.Param.Seq, 300-i))
+		fmt.Printf("waitting %d seconds...\n" , 300-i)
+		time.Sleep(1 * time.Second)
+	}
 	fmt.Println("测站扫描停止完毕")
 	return nil
 }
@@ -301,14 +337,22 @@ func (r *RmmsClient) Action6_SaveProject() *response.ReplyResponse {
 		return response.SaveProjectError
 	}
 
-	if err := r.action6StopCollect(); err != nil {
+	if err := r.action6StopSynCollect(); err != nil {
 		log.Println("err:", err)
 		return response.SaveProjectError
 	}
 
-	if err := r.action6StopSynCollect(); err != nil {
+	if err := r.action6StopScan(); err != nil {
 		log.Println("err:", err)
 		return response.SaveProjectError
+	}
+
+	fmt.Println("正在停止扫描仪转动，等待45秒...")
+	for i := 0; i < 45 ; i++ {
+		r.Ws.Pubscribe(r.config.StompTopic.StatusPush,
+			response.WaitForStopReply.MarshalToStatusBytes(r.Param.Seq, 45-i))
+		fmt.Printf("waitting %d seconds...\n" ,45-i)
+		time.Sleep(1 * time.Second)
 	}
 
 	return nil
