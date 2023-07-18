@@ -85,6 +85,7 @@ func (r *RmmsClient) ActionCmdSub(cmd []byte) {
 		scanMode = connectCmd.Payload.DeviceInfo.Lidar01.Property.Lidarparameter.ScanMode
 		encoderFrequency = connectCmd.Payload.DeviceInfo.Lidar01.Property.Lidarparameter.EncoderFrequency
 		wheelCircumference = connectCmd.Payload.DeviceInfo.Lidar01.Property.Lidarparameter.WheelCircumference
+		ReceivedLog.Println("received cmd: ", CmdConn)
 	} else if connectCmd.Cmd == CmdStart {
 		err := json.Unmarshal(cmd, &startCmd)
 		if err != nil {
@@ -92,6 +93,7 @@ func (r *RmmsClient) ActionCmdSub(cmd []byte) {
 			r.Ws.Pubscribe(replyTopic, response.JsonUnmarshalError.MarshalToCMDReplyBytes(seq, 0))
 			return
 		}
+		ReceivedLog.Println("received cmd: ", CmdStart)
 	} else if connectCmd.Cmd == CmdStop {
 		err := json.Unmarshal(cmd, &startCmd)
 		if err != nil {
@@ -99,6 +101,7 @@ func (r *RmmsClient) ActionCmdSub(cmd []byte) {
 			r.Ws.Pubscribe(replyTopic, response.JsonUnmarshalError.MarshalToCMDReplyBytes(seq, 0))
 			return
 		}
+		ReceivedLog.Println("received cmd: ", CmdStop)
 	} else if connectCmd.Cmd == CmdDisconn {
 		err := json.Unmarshal(cmd, &startCmd)
 		if err != nil {
@@ -106,6 +109,7 @@ func (r *RmmsClient) ActionCmdSub(cmd []byte) {
 			r.Ws.Pubscribe(replyTopic, response.JsonUnmarshalError.MarshalToCMDReplyBytes(seq, 0))
 			return
 		}
+		ReceivedLog.Println("received cmd: ", CmdDisconn)
 	}
 
 	switch connectCmd.Cmd {

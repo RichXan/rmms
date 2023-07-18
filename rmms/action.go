@@ -2,7 +2,6 @@ package rmms
 
 import (
 	"fmt"
-	"log"
 	"strconv"
 	"strings"
 
@@ -50,7 +49,7 @@ func (r *RmmsClient) action1StartServer() error {
 
 	// 校验返回值
 	if string(response) != "$OK" {
-		return fmt.Errorf("发送启动采集操控服务程序指令失败")
+		return fmt.Errorf("发送启动采集操控服务程序指令失败" + ",$SCT,RMMSSERVER" + ":" + string(response))
 	}
 
 	return nil
@@ -60,34 +59,34 @@ func (r *RmmsClient) connAllTcpServer() error {
 	// 初始化连接tcp_port_daq端口
 	err := r.tc.InitConnPort(tcp_ip, tcp_port_daq)
 	if err != nil {
-		log.Println("初始化连接", tcp_port_daq, "端口失败！")
+		ErrorLog.Println("初始化连接", tcp_port_daq, "端口失败！")
 		return err
 	}
-	fmt.Println("daq服务已启动")
+	SuccessLog.Println("daq服务已连接成功！")
 
 	// 初始化连接tcp_port_sync端口
 	err = r.tc.InitConnPort(tcp_ip, tcp_port_sync)
 	if err != nil {
-		log.Println("初始化连接", tcp_port_sync, "端口失败！")
+		ErrorLog.Println("初始化连接", tcp_port_sync, "端口失败！")
 		return err
 	}
-	fmt.Println("sync服务已启动")
+	SuccessLog.Println("sync服务已连接成功！")
 
 	// 初始化连接tcp_port_scanner端口
 	err = r.tc.InitConnPort(tcp_ip, tcp_port_scanner)
 	if err != nil {
-		log.Println("初始化连接", tcp_port_scanner, "端口失败！")
+		ErrorLog.Println("初始化连接", tcp_port_scanner, "端口失败！")
 		return err
 	}
-	fmt.Println("scanner服务已启动")
+	SuccessLog.Println("scanner服务已连接成功！")
 
 	// 初始化连接tcp_port_gps端口
 	err = r.tc.InitConnPort(tcp_ip, tcp_port_gps)
 	if err != nil {
-		log.Println("初始化连接", tcp_port_gps, "端口失败！")
+		ErrorLog.Println("初始化连接", tcp_port_gps, "端口失败！")
 		return err
 	}
-	fmt.Println("gps服务已启动")
+	SuccessLog.Println("gps服务已连接成功！")
 
 	return nil
 }

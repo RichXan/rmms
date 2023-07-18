@@ -3,10 +3,12 @@ package rmms
 import (
 	"fmt"
 	"log"
+	"os"
 	"sync"
 	"time"
 
 	"mms/config"
+	"mms/pkg"
 	"mms/response"
 	"mms/tcp"
 	"mms/websocket"
@@ -39,6 +41,14 @@ const (
 	RmmsDisconnecting
 )
 
+var (
+	InfoLog     *log.Logger
+	DebugLog    *log.Logger
+	ErrorLog    *log.Logger
+	SuccessLog  *log.Logger
+	ReceivedLog *log.Logger
+)
+
 type RmmsParam struct {
 	Seq            int        // 序列号
 	Status         RmmsStatus // 状态
@@ -55,6 +65,34 @@ type RmmsClient struct {
 	Ws     *websocket.StompWS
 	Param  *RmmsParam
 	config *config.GlobalConfig
+}
+
+func init() {
+	now := time.Now().In(time.FixedZone("CST", 8*3600)).Format("200601021504")
+	path := "./3dlidarLog"
+	filename := now + ".txt"
+	file := path + "/" + filename
+
+	// 判断文件是否存在，不存在则创建
+	if !pkg.IsExist(path) {
+		err := pkg.CreateDir(path)
+		if err != nil {
+			panic(err)
+		}
+	}
+	logFile, err := os.OpenFile(file, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0766)
+	if err != nil {
+		panic(err)
+	}
+	log.SetOutput(logFile) // 将文件设置为log输出的文件
+	log.SetFlags(log.LstdFlags | log.Lshortfile | log.LUTC)
+
+	// 设置日志前缀
+	InfoLog = log.New(logFile, "[Info] ", log.LstdFlags|log.Lshortfile|log.LUTC)
+	DebugLog = log.New(logFile, "[Debug]", log.LstdFlags|log.Lshortfile|log.LUTC)
+	ErrorLog = log.New(logFile, "[Error]", log.LstdFlags|log.Lshortfile|log.LUTC)
+	SuccessLog = log.New(logFile, "[Success]", log.LstdFlags|log.Lshortfile|log.LUTC)
+	ReceivedLog = log.New(logFile, "[Received]", log.LstdFlags|log.Lshortfile|log.LUTC)
 }
 
 // 创建一个rmms客户端
@@ -79,31 +117,30 @@ func NewRmmsClient(config *config.GlobalConfig) *RmmsClient {
 func (r *RmmsClient) Action1_StartServer() *response.ReplyResponse {
 	// 初始化连接tcp_port_rmms端口
 	if err := r.tc.InitConnPort(tcp_ip, tcp_port_rmms); err != nil {
-		log.Println("初始化连接", tcp_port_rmms, "端口失败！")
+		ErrorLog.Println("初始化连接", tcp_port_rmms, "端口失败！")
 		return response.ConnectServerError
 	}
 
 	// 启动服务
 	if err := r.action1StartServer(); err != nil {
-		log.Println(err)
+		ErrorLog.Println(err)
 		return response.StartServerError
 	}
 
 	// 等待15秒，等待服务程序启动，连接子设备
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
-	fmt.Println("启动采集操控服务程序...")
+	InfoLog.Println("发送启动采集操控服务程序指令成功，启动采集操控服务程序...")
 	for i := 0; i+5 < 15; i++ {
 		// 上报设备状态
 		r.Ws.Pubscribe(r.config.StompTopic.CmdReply,
 			response.WaitForConnReply.MarshalToCMDReplyBytes(r.Param.Seq, 15-i))
-		fmt.Printf("waitting %d seconds...\n", 15-i)
+		InfoLog.Printf("waitting %d seconds...\n", 15-i)
 		time.Sleep(1 * time.Second)
 	}
-	fmt.Println("启动采集操控服务程序成功！")
+	SuccessLog.Println("启动采集操控服务程序成功！")
 
 	if err := r.connAllTcpServer(); err != nil {
-		log.Println(err)
 		return response.ConnectServerError
 	}
 
@@ -111,12 +148,12 @@ func (r *RmmsClient) Action1_StartServer() *response.ReplyResponse {
 		// 上报设备状态
 		r.Ws.Pubscribe(r.config.StompTopic.CmdReply,
 			response.WaitForConnReply.MarshalToCMDReplyBytes(r.Param.Seq, 15-i))
-		fmt.Printf("waitting %d seconds...\n", 15-i)
+		InfoLog.Printf("waitting %d seconds...\n", 15-i)
 		time.Sleep(1 * time.Second)
 	}
 
 	r.Ws.Pubscribe(r.config.StompTopic.StatusPush, r.GenStatusResponse(Normal))
-	fmt.Println("连接子tcp服务成功！")
+	SuccessLog.Println("连接子tcp服务成功！")
 	return nil
 }
 

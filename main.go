@@ -12,7 +12,7 @@ import (
 )
 
 func main() {
-	log.SetFlags(log.Lshortfile | log.LstdFlags)
+	log.Println("3DLidar服务启动")
 	// 读取yaml文件
 	filePath := "./config/rmms.yaml"
 	config, err := readYamltoStruct(filePath)
