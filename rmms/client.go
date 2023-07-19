@@ -44,7 +44,8 @@ const (
 var (
 	InfoLog     *log.Logger
 	DebugLog    *log.Logger
-	ErrorLog    *log.Logger
+	HErrorLog   *log.Logger
+	DErrorLog   *log.Logger
 	SuccessLog  *log.Logger
 	ReceivedLog *log.Logger
 )
@@ -90,7 +91,8 @@ func init() {
 	// 设置日志前缀
 	InfoLog = log.New(logFile, "[Info] ", log.LstdFlags|log.Lshortfile|log.LUTC)
 	DebugLog = log.New(logFile, "[Debug]", log.LstdFlags|log.Lshortfile|log.LUTC)
-	ErrorLog = log.New(logFile, "[Error]", log.LstdFlags|log.Lshortfile|log.LUTC)
+	HErrorLog = log.New(logFile, "[HError]", log.LstdFlags|log.Lshortfile|log.LUTC)
+	DErrorLog = log.New(logFile, "[DError]", log.LstdFlags|log.Lshortfile|log.LUTC)
 	SuccessLog = log.New(logFile, "[Success]", log.LstdFlags|log.Lshortfile|log.LUTC)
 	ReceivedLog = log.New(logFile, "[Received]", log.LstdFlags|log.Lshortfile|log.LUTC)
 }
@@ -117,43 +119,20 @@ func NewRmmsClient(config *config.GlobalConfig) *RmmsClient {
 func (r *RmmsClient) Action1_StartServer() *response.ReplyResponse {
 	// 初始化连接tcp_port_rmms端口
 	if err := r.tc.InitConnPort(tcp_ip, tcp_port_rmms); err != nil {
-		ErrorLog.Println("初始化连接", tcp_port_rmms, "端口失败！")
+		DErrorLog.Println("初始化连接", tcp_port_rmms, "端口失败！")
 		return response.ConnectServerError
 	}
 
 	// 启动服务
 	if err := r.action1StartServer(); err != nil {
-		ErrorLog.Println(err)
 		return response.StartServerError
 	}
-
-	// 等待15秒，等待服务程序启动，连接子设备
-	r.mutex.Lock()
-	defer r.mutex.Unlock()
-	InfoLog.Println("发送启动采集操控服务程序指令成功，启动采集操控服务程序...")
-	for i := 0; i+5 < 15; i++ {
-		// 上报设备状态
-		r.Ws.Pubscribe(r.config.StompTopic.CmdReply,
-			response.WaitForConnReply.MarshalToCMDReplyBytes(r.Param.Seq, 15-i))
-		InfoLog.Printf("waitting %d seconds...\n", 15-i)
-		time.Sleep(1 * time.Second)
-	}
-	SuccessLog.Println("启动采集操控服务程序成功！")
 
 	if err := r.connAllTcpServer(); err != nil {
 		return response.ConnectServerError
 	}
 
-	for i := 10; i < 15; i++ {
-		// 上报设备状态
-		r.Ws.Pubscribe(r.config.StompTopic.CmdReply,
-			response.WaitForConnReply.MarshalToCMDReplyBytes(r.Param.Seq, 15-i))
-		InfoLog.Printf("waitting %d seconds...\n", 15-i)
-		time.Sleep(1 * time.Second)
-	}
-
 	r.Ws.Pubscribe(r.config.StompTopic.StatusPush, r.GenStatusResponse(Normal))
-	SuccessLog.Println("连接子tcp服务成功！")
 	return nil
 }
 
@@ -166,35 +145,30 @@ func (r *RmmsClient) Action2_Connect(nScanType, scanMode,
 
 	// 测试各服务状态
 	if err := r.actionTestAllServer(); err != nil {
-		log.Println(err)
 		response.ConnectServerError.Msg = err.Error()
 		return response.ConnectServerError
 	}
 
 	//2.同步，打开gps
 	if err := r.action2OpenGPS(); err != nil {
-		log.Println(err)
 		response.ConnectServerError.Msg = err.Error()
 		return response.ConnectServerError
 	}
 
 	//3.同步，设置无gps模式
 	if err := r.action2NoGPSMode(); err != nil {
-		log.Println(err)
 		response.ConnectServerError.Msg = err.Error()
 		return response.ConnectServerError
 	}
 
 	//4.扫描：设置扫描频率
 	if err := r.action2ScanType(nScanType); err != nil {
-		log.Println(err)
 		response.ConnectServerError.Msg = err.Error()
 		return response.ConnectServerError
 	}
 
 	// 5.设置扫描模式  %d=0表示为拉行，1表示为推行
 	if err := r.action2SetScanMode(scanMode); err != nil {
-		log.Println(err)
 		response.ConnectServerError.Msg = err.Error()
 		return response.ConnectServerError
 	}
@@ -202,7 +176,6 @@ func (r *RmmsClient) Action2_Connect(nScanType, scanMode,
 	// 6.设置编码器、车轮周长参数，其中%d表示对应的编码器频率，%lf表示车轮周长(小数点后三位)，单位为米。
 	if err := r.action2SetEncoderWheelCircumference(encoderFrequency,
 		wheelCircumference); err != nil {
-		log.Println(err)
 		response.ConnectServerError.Msg = err.Error()
 		return response.ConnectServerError
 	}
@@ -213,7 +186,6 @@ func (r *RmmsClient) Action2_Connect(nScanType, scanMode,
 func (r *RmmsClient) Action3_NewProject(projectName string) *response.ReplyResponse {
 	// 测试各服务状态
 	if err := r.actionTestAllServer(); err != nil {
-		log.Println(err)
 		response.NewProjectError.Msg = err.Error()
 		return response.NewProjectError
 	}
@@ -221,7 +193,6 @@ func (r *RmmsClient) Action3_NewProject(projectName string) *response.ReplyRespo
 	// 判断是否已经在惯导采集状态是否正在采集
 	DAQStatus, err := r.queryDAQCollectStatus()
 	if err != nil {
-		log.Println(err)
 		response.NewProjectError.Msg = err.Error()
 		return response.NewProjectError
 	}
@@ -229,7 +200,6 @@ func (r *RmmsClient) Action3_NewProject(projectName string) *response.ReplyRespo
 	// 判断激光雷达采集状态是否正在采集
 	scannerStatus, err := r.queryScannerCollectStatus()
 	if err != nil {
-		log.Println(err)
 		response.NewProjectError.Msg = err.Error()
 		return response.NewProjectError
 	}
@@ -251,23 +221,18 @@ func (r *RmmsClient) Action3_NewProject(projectName string) *response.ReplyRespo
 
 	log.Println("工程名为：", nameStr)
 	if err := r.action3SetDAQProjectName(nameStr); err != nil {
-		log.Println(err)
 		return response.NewProjectError
 	}
 	if err := r.action3SetScanProjectName(nameStr); err != nil {
-		log.Println(err)
 		return response.NewProjectError
 	}
 	if err := r.action3SetSyncProjectName(nameStr); err != nil {
-		log.Println(err)
 		return response.NewProjectError
 	}
 	if err := r.action3StartDqa(); err != nil {
-		log.Println(err)
 		return response.NewProjectError
 	}
 	if err := r.action3StartSyn(); err != nil {
-		log.Println(err)
 		return response.NewProjectError
 	}
 

@@ -2,8 +2,10 @@ package rmms
 
 import (
 	"fmt"
+	"mms/response"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/axgle/mahonia" //编码转换
 )
@@ -12,7 +14,9 @@ import (
 func (r *RmmsClient) sendCommand(port int, cmd string) ([]byte, error) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
+	time.Sleep(200 * time.Millisecond)
 
+	// TODO: 需要发送的什么内容？
 	if cmd == "" {
 		return nil, nil
 	}
@@ -24,11 +28,16 @@ func (r *RmmsClient) sendCommand(port int, cmd string) ([]byte, error) {
 	}
 
 	if string(response) == "$Err" {
-		return nil, fmt.Errorf("发送命令失败")
+		DErrorLog.Println("设备端回复内容为：" + string(response))
+		return nil, fmt.Errorf("发送命令失败:response=$Err")
 	}
 
+	if string(response) != "$OK" {
+		DErrorLog.Println("设备端回复内容为：" + string(response))
+		return nil, fmt.Errorf("发送命令失败:response!=$OK")
+	}
 	// TODO: check response
-	fmt.Println("response:", string(response))
+	// fmt.Println("response:", string(response))
 
 	return response, nil
 }
@@ -40,17 +49,27 @@ func (r *RmmsClient) close() error {
 
 // 启动采集操控服务程序
 func (r *RmmsClient) action1StartServer() error {
+	InfoLog.Println("发送启动采集操控服务程序指令成功，启动采集操控服务程序...")
 	// 发送消息
-	response, err := r.sendCommand(tcp_port_rmms, "$SCT,RMMSSERVER")
+	_, err := r.sendCommand(tcp_port_rmms, "$SCT,RMMSSERVER")
 	if err != nil {
 		// gps服务未启动，gps端口连接失败。
+		DErrorLog.Println("发送启动采集操控服务程序指令失败" + ",$SCT,RMMSSERVER" + ":" + err.Error())
 		return err
 	}
 
-	// 校验返回值
-	if string(response) != "$OK" {
-		return fmt.Errorf("发送启动采集操控服务程序指令失败" + ",$SCT,RMMSSERVER" + ":" + string(response))
+	// 等待15秒，等待服务程序启动，连接子设备
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+	InfoLog.Println("发送启动采集操控服务程序指令成功，启动采集操控服务程序...")
+	for i := 0; i+5 < 15; i++ {
+		// 上报设备状态
+		r.Ws.Pubscribe(r.config.StompTopic.CmdReply,
+			response.WaitForConnReply.MarshalToCMDReplyBytes(r.Param.Seq, 15-i))
+		InfoLog.Printf("waitting %d seconds...\n", 15-i)
+		time.Sleep(1 * time.Second)
 	}
+	SuccessLog.Println("启动采集操控服务程序成功！")
 
 	return nil
 }
@@ -59,7 +78,7 @@ func (r *RmmsClient) connAllTcpServer() error {
 	// 初始化连接tcp_port_daq端口
 	err := r.tc.InitConnPort(tcp_ip, tcp_port_daq)
 	if err != nil {
-		ErrorLog.Println("初始化连接", tcp_port_daq, "端口失败！")
+		DErrorLog.Println("初始化连接", tcp_port_daq, "端口失败！")
 		return err
 	}
 	SuccessLog.Println("daq服务已连接成功！")
@@ -67,7 +86,7 @@ func (r *RmmsClient) connAllTcpServer() error {
 	// 初始化连接tcp_port_sync端口
 	err = r.tc.InitConnPort(tcp_ip, tcp_port_sync)
 	if err != nil {
-		ErrorLog.Println("初始化连接", tcp_port_sync, "端口失败！")
+		DErrorLog.Println("初始化连接", tcp_port_sync, "端口失败！")
 		return err
 	}
 	SuccessLog.Println("sync服务已连接成功！")
@@ -75,7 +94,7 @@ func (r *RmmsClient) connAllTcpServer() error {
 	// 初始化连接tcp_port_scanner端口
 	err = r.tc.InitConnPort(tcp_ip, tcp_port_scanner)
 	if err != nil {
-		ErrorLog.Println("初始化连接", tcp_port_scanner, "端口失败！")
+		DErrorLog.Println("初始化连接", tcp_port_scanner, "端口失败！")
 		return err
 	}
 	SuccessLog.Println("scanner服务已连接成功！")
@@ -83,14 +102,24 @@ func (r *RmmsClient) connAllTcpServer() error {
 	// 初始化连接tcp_port_gps端口
 	err = r.tc.InitConnPort(tcp_ip, tcp_port_gps)
 	if err != nil {
-		ErrorLog.Println("初始化连接", tcp_port_gps, "端口失败！")
+		DErrorLog.Println("初始化连接", tcp_port_gps, "端口失败！")
 		return err
 	}
 	SuccessLog.Println("gps服务已连接成功！")
 
+	for i := 10; i < 15; i++ {
+		// 上报设备状态
+		r.Ws.Pubscribe(r.config.StompTopic.CmdReply,
+			response.WaitForConnReply.MarshalToCMDReplyBytes(r.Param.Seq, 15-i))
+		InfoLog.Printf("waitting %d seconds...\n", 15-i)
+		time.Sleep(1 * time.Second)
+	}
+	SuccessLog.Println("连接子tcp服务成功！")
+
 	return nil
 }
 
+// TODO 未完成
 func (r *RmmsClient) actionTestAllServer() error {
 	_, err := r.sendCommand(tcp_port_daq, "")
 	if err != nil {
@@ -124,31 +153,32 @@ func (r *RmmsClient) action2OpenGPS() error {
 	response, err := r.sendCommand(tcp_port_sync, "%SGS47\r\n")
 	if err != nil {
 		// gps服务未启动，gps端口连接失败。
+		DErrorLog.Println("打开GPS失败" + ",%SGS47" + ":" + err.Error())
 		return err
 	}
 
 	// 校验返回值
 	if string(response) != "$OK" {
-		return fmt.Errorf("打开GPS失败")
+		errstr := fmt.Sprintf("打开GPS失败" + ",%SGS47" + ":" + string(response))
+		DErrorLog.Println(errstr)
+		return fmt.Errorf(errstr)
 	}
-	fmt.Println("成功打开GPS脉冲")
+
+	SuccessLog.Println("1.成功打开GPS脉冲")
 	return nil
 }
 
 // 设置采集模式为无 GPS 模式（即隧道模式）
 func (r *RmmsClient) action2NoGPSMode() error {
 	// 打开gps
-	response, err := r.sendCommand(tcp_port_sync, "%SMT4A\r\n")
+	_, err := r.sendCommand(tcp_port_sync, "%SMT4A\r\n")
 	if err != nil {
 		// gps服务未启动，gps端口连接失败。
+		DErrorLog.Println("设置采集模式为无GPS模式失败" + ",%SMT4A" + ":" + err.Error())
 		return err
 	}
 
-	// 校验返回值
-	if string(response) != "$OK" {
-		return fmt.Errorf("设置采集模式为无GPS模式失败")
-	}
-	fmt.Println("成功设置采集模式为无GPS模式")
+	SuccessLog.Println("2.成功设置采集模式为无GPS模式")
 	return nil
 }
 
@@ -162,41 +192,35 @@ func (r *RmmsClient) action2ScanType(scanType int) error {
 	_, err := r.sendCommand(tcp_port_scanner, cmd)
 	if err != nil {
 		// gps服务未启动，gps端口连接失败。
+		DErrorLog.Println("设置扫描频率失败" + ",$LFTSC,1," + strconv.Itoa(scanType) + ":" + err.Error())
 		return err
 	}
-	fmt.Println("成功设置扫描频率为：", scanType)
-	//无校验
+
+	SuccessLog.Printf("3.成功设置扫描频率为：%d \n", scanType)
 	return nil
 }
 
 // 设置扫描模式  %d=0表示为拉行，1表示为推行
 func (r *RmmsClient) action2SetScanMode(mode int) error {
-	response, err := r.sendCommand(tcp_port_scanner, "$LSMOD,"+strconv.Itoa(mode))
+	_, err := r.sendCommand(tcp_port_scanner, "$LSMOD,"+strconv.Itoa(mode))
 	if err != nil {
+		DErrorLog.Println("设置扫描模式失败" + ",$LSMOD," + strconv.Itoa(mode) + ":" + err.Error())
 		return err
 	}
 
-	// 校验返回值
-	if string(response) != "$OK" {
-		return fmt.Errorf("设置扫描模式失败")
-	}
-	fmt.Println("成功设置扫描模式为：", mode)
+	SuccessLog.Printf("4.成功设置扫描模式为：%d \n", mode)
 	return nil
 }
 
 // 设置编码器、车轮周长参数，其中%d表示对应的编码器频率，%lf表示车轮周长，单位为米。
 func (r *RmmsClient) action2SetEncoderWheelCircumference(encoderFrequency int, wheelCircumference float64) error {
-	response, err := r.sendCommand(tcp_port_scanner, "$DMIV,"+strconv.Itoa(encoderFrequency)+","+strconv.FormatFloat(wheelCircumference, 'f', 2, 64))
+	_, err := r.sendCommand(tcp_port_scanner, "$DMIV,"+strconv.Itoa(encoderFrequency)+","+strconv.FormatFloat(wheelCircumference, 'f', 2, 64))
 	if err != nil {
+		DErrorLog.Printf("设置编码器、车轮周长参数失败,$DMIV,%d,%.2f : %s \n", encoderFrequency, wheelCircumference, err.Error())
 		return err
 	}
 
-	// 校验返回值
-	if string(response) != "$OK" {
-		return fmt.Errorf("设置编码器、车轮周长参数失败")
-	}
-
-	fmt.Printf("成功设置编码器、车轮周长参数为：%d, %f \n", encoderFrequency, wheelCircumference)
+	SuccessLog.Printf("5.成功设置编码器、车轮周长参数为：%d, %f \n", encoderFrequency, wheelCircumference)
 	return nil
 }
 

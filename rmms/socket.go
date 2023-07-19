@@ -118,14 +118,14 @@ func (r *RmmsClient) ActionCmdSub(cmd []byte) {
 		r.Param.ProjectPath = connectCmd.Payload.ProjectInfo.Path
 
 		if r.Param.Status == RmmsConn {
-			log.Println("设备已经连接")
+			HErrorLog.Println("设备已经连接")
 			r.Ws.Pubscribe(replyTopic, response.AlreadyConnError.MarshalToCMDReplyBytes(seq, 0))
 			r.Ws.Pubscribe(statusTopic, r.GenStatusResponse(Normal))
 			return
 		}
 
 		if r.Param.Status == RmmsConnecting {
-			log.Println("设备正在连接")
+			HErrorLog.Println("设备正在连接")
 			r.Ws.Pubscribe(replyTopic, response.IsConnectingError.MarshalToCMDReplyBytes(seq, 0))
 			r.Ws.Pubscribe(statusTopic, r.GenStatusResponse(Normal))
 			return
@@ -133,7 +133,7 @@ func (r *RmmsClient) ActionCmdSub(cmd []byte) {
 
 		// 判断rmms的状态是否为disconn
 		if r.Param.Status != RmmsDisconn {
-			log.Println("当前的状态为：", r.Param.Status, "不允许执行连接操作")
+			HErrorLog.Println("当前的状态为：", r.Param.Status, "不允许执行连接操作")
 			r.Ws.Pubscribe(replyTopic, response.StatusConnError.MarshalToCMDReplyBytes(seq, 0))
 			return
 		}
@@ -144,13 +144,14 @@ func (r *RmmsClient) ActionCmdSub(cmd []byte) {
 
 		// 连接
 		if err := r.Action2_Connect(nScanType, scanMode, encoderFrequency, wheelCircumference); err != nil {
+			HErrorLog.Println(err)
 			r.Ws.Pubscribe(replyTopic, response.StartServerError.MarshalToCMDReplyBytes(seq, 0))
 			return
 		}
 
 		// 新建工程
 		if err := r.Action3_NewProject(projectName); err != nil {
-			log.Println(err)
+			HErrorLog.Println(err)
 			r.Ws.Pubscribe(replyTopic, err.MarshalToCMDReplyBytes(seq, 0))
 			return
 		}
@@ -162,7 +163,7 @@ func (r *RmmsClient) ActionCmdSub(cmd []byte) {
 		if daqStatus != "1" || scannerStatus != "1" {
 			// 开始测站扫描
 			if err := r.Action4_StartStation(); err != nil {
-				log.Println(err)
+				HErrorLog.Println(err)
 				r.Ws.Pubscribe(replyTopic, err.MarshalToCMDReplyBytes(seq, 0))
 				return
 			}
@@ -174,7 +175,7 @@ func (r *RmmsClient) ActionCmdSub(cmd []byte) {
 		r.Ws.Pubscribe(replyTopic, response.Success.MarshalToCMDReplyBytes(seq, 0))
 	case CmdStart:
 		if r.Param.Status == RmmsStart {
-			log.Println("设备已经启动")
+			HErrorLog.Println("设备已经启动")
 			r.Ws.Pubscribe(replyTopic, response.AlreadyStartError.MarshalToCMDReplyBytes(seq, 0))
 			r.Ws.Pubscribe(statusTopic, r.GenStatusResponse(Normal))
 			return
@@ -182,7 +183,7 @@ func (r *RmmsClient) ActionCmdSub(cmd []byte) {
 
 		// 判断rmms的状态是否为conn,stop
 		if !(r.Param.Status == RmmsConn || r.Param.Status == RmmsStop) {
-			log.Println("当前的状态为：", r.Param.Status, "不允许执行启动操作")
+			HErrorLog.Println("当前的状态为：", r.Param.Status, "不允许执行启动操作")
 			r.Ws.Pubscribe(replyTopic, response.StatusStartError.MarshalToCMDReplyBytes(seq, 0))
 			return
 		}
@@ -202,7 +203,7 @@ func (r *RmmsClient) ActionCmdSub(cmd []byte) {
 		r.Ws.Pubscribe(replyTopic, response.Success.MarshalToCMDReplyBytes(seq, 0))
 	case CmdStop:
 		if r.Param.Status == RmmsStop {
-			log.Println("设备已经停止")
+			HErrorLog.Println("设备已经停止")
 			r.Ws.Pubscribe(replyTopic, response.AlreadyStopError.MarshalToCMDReplyBytes(seq, 0))
 			r.Ws.Pubscribe(statusTopic, r.GenStatusResponse(Normal))
 			return
@@ -210,7 +211,7 @@ func (r *RmmsClient) ActionCmdSub(cmd []byte) {
 
 		// 判断rmms的状态是否为start
 		if r.Param.Status != RmmsStart {
-			log.Println("当前的状态为：", r.Param.Status, "不允许执行停止操作")
+			HErrorLog.Println("当前的状态为：", r.Param.Status, "不允许执行停止操作")
 			r.Ws.Pubscribe(replyTopic, response.StatusStopError.MarshalToCMDReplyBytes(seq, 0))
 			return
 		}
@@ -227,14 +228,14 @@ func (r *RmmsClient) ActionCmdSub(cmd []byte) {
 		r.Ws.Pubscribe(replyTopic, response.Success.MarshalToCMDReplyBytes(seq, 0))
 	case CmdDisconn:
 		if r.Param.Status == RmmsDisconn {
-			log.Println("设备已经断开")
+			HErrorLog.Println("设备已经断开")
 			r.Ws.Pubscribe(replyTopic, response.AlreadyDisconnError.MarshalToCMDReplyBytes(seq, 0))
 			r.Ws.Pubscribe(statusTopic, r.GenStatusResponse(Normal))
 			return
 		}
 
 		if r.Param.Status == RmmsDisconnecting {
-			log.Println("设备正在断开")
+			HErrorLog.Println("设备正在断开")
 			r.Ws.Pubscribe(replyTopic, response.IsDisconnectingError.MarshalToCMDReplyBytes(seq, 0))
 			r.Ws.Pubscribe(statusTopic, r.GenStatusResponse(Normal))
 			return
@@ -246,21 +247,21 @@ func (r *RmmsClient) ActionCmdSub(cmd []byte) {
 			r.Param.Status = RmmsDisconnecting
 			// 停止测站扫描
 			if err := r.Action5_StopStation(); err != nil {
-				log.Println(err)
+				HErrorLog.Println(err)
 				r.Ws.Pubscribe(replyTopic, err.MarshalToCMDReplyBytes(seq, 0))
 				return
 			}
 
 			// 保存工程
 			if err := r.Action6_SaveProject(); err != nil {
-				log.Println(err)
+				HErrorLog.Println(err)
 				r.Ws.Pubscribe(replyTopic, err.MarshalToCMDReplyBytes(seq, 0))
 				return
 			}
 
 			// 断开连接
 			if err := r.Action7_CloseDevice(); err != nil {
-				log.Println(err)
+				HErrorLog.Println(err)
 				r.Ws.Pubscribe(replyTopic, err.MarshalToCMDReplyBytes(seq, 0))
 				return
 			}
@@ -273,11 +274,11 @@ func (r *RmmsClient) ActionCmdSub(cmd []byte) {
 			return
 		}
 
-		log.Println("当前的状态为：", r.Param.Status, "不允许执行断开连接操作")
+		HErrorLog.Println("当前的状态为：", r.Param.Status, "不允许执行断开连接操作")
 		r.Ws.Pubscribe(replyTopic, response.StatusDisconnError.MarshalToCMDReplyBytes(seq, 0))
 
 	default:
-		log.Println("cmd错误")
+		HErrorLog.Println("cmd错误")
 		r.Ws.Pubscribe(replyTopic, response.CmdError.MarshalToCMDReplyBytes(seq, 0))
 	}
 }
