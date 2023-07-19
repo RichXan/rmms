@@ -152,8 +152,10 @@ var (
 	JsonUnmarshalError = NewResponse(95002, "json反序列化错误")
 
 	// 执行中，等待的回复
-	WaitForConnReply    = NewResponse(70001, "启动操控服务程序，连接tcp服务中...")
-	WaitForStartReply   = NewResponse(70002, "激光雷达惯导检测中...")
-	WaitForStopReply    = NewResponse(70003, "停止测站扫描并保存工程中...")
-	WaitForDisconnReply = NewResponse(70004, "关闭设备，断开连接中...")
+	WaitForConnReply         = NewResponse(70001, "启动操控服务程序，连接tcp服务中...")
+	WaitForSyncStartReply    = NewResponse(70002, "启动激光雷达惯导检测中...")
+	WaitForScannerStartReply = NewResponse(70003, "启动扫描仪测站扫描检测中...")
+	WaitForSyncStopReply     = NewResponse(70004, "停止激光雷达惯导并保存工程中...")
+	WaitForScannerStopReply  = NewResponse(70005, "停止停止扫描仪转动并保存工程中...")
+	WaitForDisconnReply      = NewResponse(70006, "关闭设备，断开连接中...")
 )

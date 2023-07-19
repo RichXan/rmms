@@ -3,7 +3,7 @@ package tcp
 import (
 	"bufio"
 	"context"
-	"fmt"
+	"log"
 	"net"
 	"sync"
 	"time"
@@ -36,7 +36,7 @@ type Option struct {
 func main(message string) {
 	conn, err := net.Dial("tcp", "127.0.0.1:9999")
 	if err != nil {
-		fmt.Println("err : ", err)
+		log.Println("err : ", err)
 		return
 	}
 	defer conn.Close() // 关闭TCP连接
@@ -48,10 +48,10 @@ func main(message string) {
 		buf := [512]byte{}
 		n, err := conn.Read(buf[:])
 		if err != nil {
-			fmt.Println("recv failed, err:", err)
+			log.Println("recv failed, err:", err)
 			return
 		}
-		fmt.Println(string(buf[:n]))
+		log.Println(string(buf[:n]))
 	}
 }
 

@@ -1,7 +1,6 @@
 package rmms
 
 import (
-	"fmt"
 	"log"
 	"os"
 	"sync"
@@ -44,8 +43,9 @@ const (
 var (
 	InfoLog     *log.Logger
 	DebugLog    *log.Logger
-	HErrorLog   *log.Logger
 	DErrorLog   *log.Logger
+	HErrorLog   *log.Logger
+	SErrorLog   *log.Logger
 	SuccessLog  *log.Logger
 	ReceivedLog *log.Logger
 )
@@ -91,8 +91,9 @@ func init() {
 	// 设置日志前缀
 	InfoLog = log.New(logFile, "[Info] ", log.LstdFlags|log.Lshortfile|log.LUTC)
 	DebugLog = log.New(logFile, "[Debug]", log.LstdFlags|log.Lshortfile|log.LUTC)
-	HErrorLog = log.New(logFile, "[HError]", log.LstdFlags|log.Lshortfile|log.LUTC)
 	DErrorLog = log.New(logFile, "[DError]", log.LstdFlags|log.Lshortfile|log.LUTC)
+	HErrorLog = log.New(logFile, "[HError]", log.LstdFlags|log.Lshortfile|log.LUTC)
+	SErrorLog = log.New(logFile, "[SError]", log.LstdFlags|log.Lshortfile|log.LUTC)
 	SuccessLog = log.New(logFile, "[Success]", log.LstdFlags|log.Lshortfile|log.LUTC)
 	ReceivedLog = log.New(logFile, "[Received]", log.LstdFlags|log.Lshortfile|log.LUTC)
 }
@@ -219,7 +220,6 @@ func (r *RmmsClient) Action3_NewProject(projectName string) *response.ReplyRespo
 		nameStr = projectName + "_" + time.Now().Format("20060102150405")
 	}
 
-	log.Println("工程名为：", nameStr)
 	if err := r.action3SetDAQProjectName(nameStr); err != nil {
 		return response.NewProjectError
 	}
@@ -239,14 +239,15 @@ func (r *RmmsClient) Action3_NewProject(projectName string) *response.ReplyRespo
 	// 占用锁，等待五分钟
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
-	fmt.Println("正在启动惯导检测，等待5分钟...")
+	InfoLog.Println("正在启动惯导检测，等待5分钟...")
 	for i := 0; i < 300; i++ {
 		r.Ws.Pubscribe(r.config.StompTopic.CmdReply,
-			response.WaitForStartReply.MarshalToCMDReplyBytes(r.Param.Seq, 300-i))
-		fmt.Printf("waitting %d seconds...\n", 300-i)
+			response.WaitForSyncStartReply.MarshalToCMDReplyBytes(r.Param.Seq, 300-i))
+		InfoLog.Printf("waitting %d seconds...\n", 300-i)
 		time.Sleep(1 * time.Second)
 	}
-	fmt.Println("惯导检测完毕，可以开始测站")
+	SuccessLog.Println("成功开始syn采集")
+	SuccessLog.Println("惯导检测完毕，可以开始测站")
 	return nil
 }
 
@@ -254,21 +255,18 @@ func (r *RmmsClient) Action3_NewProject(projectName string) *response.ReplyRespo
 func (r *RmmsClient) Action4_StartStation() *response.ReplyResponse {
 	// 测试各服务状态
 	if err := r.actionTestAllServer(); err != nil {
-		log.Println(err)
 		return response.StartStationError
 	}
 
 	// 判断激光雷达采集状态是否正在采集
 	DAQStatus, err := r.queryDAQCollectStatus()
 	if err != nil {
-		log.Println(err)
 		return response.StartStationError
 	}
 
 	// 判断激光雷达采集状态是否正在采集
 	scannerStatus, err := r.queryScannerCollectStatus()
 	if err != nil {
-		log.Println(err)
 		return response.StartStationError
 	}
 
@@ -286,21 +284,20 @@ func (r *RmmsClient) Action4_StartStation() *response.ReplyResponse {
 	strTime = strTime[:len(strTime)-6] + nanoSecond
 
 	if err := r.action4StartScanner(strTime); err != nil {
-		log.Println("err:", err)
 		return response.StartScannerError
 	}
 
 	// 占用锁，等待90秒
-	fmt.Println("正在启动测站扫描，等待90秒")
+	InfoLog.Println("正在启动测站扫描，等待90秒")
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 	for i := 0; i < 90; i++ {
 		r.Ws.Pubscribe(r.config.StompTopic.CmdReply,
-			response.WaitForStartReply.MarshalToCMDReplyBytes(r.Param.Seq, 90-i))
-		fmt.Printf("waitting %d seconds...\n", 90-i)
+			response.WaitForScannerStartReply.MarshalToCMDReplyBytes(r.Param.Seq, 90-i))
+		InfoLog.Printf("waitting %d seconds...\n", 90-i)
 		time.Sleep(1 * time.Second)
 	}
-	fmt.Println("测站扫描启动完毕")
+	SuccessLog.Println("测站扫描启动完毕")
 	return nil
 }
 
@@ -308,26 +305,24 @@ func (r *RmmsClient) Action4_StartStation() *response.ReplyResponse {
 func (r *RmmsClient) Action5_StopStation() *response.ReplyResponse {
 	// 测试各服务状态
 	if err := r.actionTestAllServer(); err != nil {
-		log.Println("err:", err)
 		return response.StopStationError
 	}
 
 	if err := r.action5StopCollect(); err != nil {
-		log.Println("err:", err)
 		return response.StopStationError
 	}
 
 	// 占用锁，等待五分钟
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
-	fmt.Println("正在停止测站扫描，等待五分钟...")
+	InfoLog.Println("正在停止测站扫描，等待五分钟...")
 	for i := 0; i < 300; i++ {
 		r.Ws.Pubscribe(r.config.StompTopic.CmdReply,
-			response.WaitForStopReply.MarshalToCMDReplyBytes(r.Param.Seq, 300-i))
-		fmt.Printf("waitting %d seconds...\n", 300-i)
+			response.WaitForSyncStopReply.MarshalToCMDReplyBytes(r.Param.Seq, 300-i))
+		InfoLog.Printf("waitting %d seconds...\n", 300-i)
 		time.Sleep(1 * time.Second)
 	}
-	fmt.Println("测站扫描停止完毕")
+	SuccessLog.Println("测站扫描停止完毕")
 	return nil
 }
 
@@ -335,27 +330,25 @@ func (r *RmmsClient) Action5_StopStation() *response.ReplyResponse {
 func (r *RmmsClient) Action6_SaveProject() *response.ReplyResponse {
 	// 测试各服务状态
 	if err := r.actionTestAllServer(); err != nil {
-		log.Println("err:", err)
 		return response.SaveProjectError
 	}
 
 	if err := r.action6StopSynCollect(); err != nil {
-		log.Println("err:", err)
 		return response.SaveProjectError
 	}
 
 	if err := r.action6StopScan(); err != nil {
-		log.Println("err:", err)
 		return response.SaveProjectError
 	}
 
-	fmt.Println("正在停止扫描仪转动，等待45秒...")
+	InfoLog.Println("正在停止扫描仪转动，等待45秒...")
 	for i := 0; i < 45; i++ {
 		r.Ws.Pubscribe(r.config.StompTopic.CmdReply,
-			response.WaitForStopReply.MarshalToCMDReplyBytes(r.Param.Seq, 45-i))
-		fmt.Printf("waitting %d seconds...\n", 45-i)
+			response.WaitForScannerStopReply.MarshalToCMDReplyBytes(r.Param.Seq, 45-i))
+		InfoLog.Printf("waitting %d seconds...\n", 45-i)
 		time.Sleep(1 * time.Second)
 	}
+	SuccessLog.Println("扫描仪转动停止完毕")
 
 	return nil
 }
@@ -364,22 +357,18 @@ func (r *RmmsClient) Action6_SaveProject() *response.ReplyResponse {
 func (r *RmmsClient) Action7_CloseDevice() *response.ReplyResponse {
 	// 测试各服务状态
 	if err := r.actionTestAllServer(); err != nil {
-		log.Println("err:", err)
 		return response.CloseDeviceError
 	}
 
 	if err := r.action7CloseGPS(); err != nil {
-		log.Println("err:", err)
 		return response.CloseDeviceError
 	}
 
 	if err := r.action7CloseScanner(); err != nil {
-		log.Println("err:", err)
 		return response.CloseDeviceError
 	}
 
 	if err := r.close(); err != nil {
-		log.Println("err:", err)
 		return response.CloseDeviceError
 	}
 	return nil

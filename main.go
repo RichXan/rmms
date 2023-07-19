@@ -17,7 +17,7 @@ func main() {
 	filePath := "./config/rmms.yaml"
 	config, err := readYamltoStruct(filePath)
 	if err != nil {
-		fmt.Println("readYamltoStruct err:", err.Error())
+		rmms.SErrorLog.Println("readYamltoStruct err:", err.Error())
 		panic(err)
 	}
 
@@ -26,7 +26,6 @@ func main() {
 	// 启动服务
 	if respErr := client.Action1_StartServer(); respErr != nil {
 		client.Ws.Pubscribe(config.StompTopic.CmdReply, respErr.MarshalToCMDReplyBytes(0, 0))
-		fmt.Println("启动服务失败: ", respErr.Msg)
 	}
 	// 监听服务器发送的cmd指令
 	client.Ws.AddSub(config.StompTopic.CmdSub, client.ActionCmdSub)
@@ -49,14 +48,14 @@ func readYamltoStruct(filePath string) (config.GlobalConfig, error) {
 	// 读取文件
 	f, err := ioutil.ReadFile(filePath)
 	if err != nil {
-		fmt.Println(err)
+		rmms.SErrorLog.Println(err)
 		return config, err
 	}
 
 	// 转换成Struct
 	err = yaml.Unmarshal(f, &config)
 	if err != nil {
-		fmt.Printf("%v\n", err.Error())
+		rmms.SErrorLog.Printf("%v\n", err.Error())
 		return config, err
 	}
 	return config, nil

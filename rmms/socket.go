@@ -2,7 +2,6 @@ package rmms
 
 import (
 	"encoding/json"
-	"fmt"
 	"log"
 	"mms/config"
 
@@ -39,13 +38,13 @@ func (r *RmmsClient) ActionCmdSub(cmd []byte) {
 			case runtime.Error: // 运行时错误
 				buf := make([]byte, 1<<16)
 				runtime.Stack(buf, true)
-				fmt.Println("buf", string(buf))
-				log.Println("runtime error:", err)
+				SErrorLog.Println("buf", string(buf))
+				SErrorLog.Println("runtime error:", err)
 			default: // 非运行时错误
 				buf := make([]byte, 1<<16)
 				runtime.Stack(buf, true)
-				fmt.Println("buf", string(buf))
-				log.Println("error:", err)
+				SErrorLog.Println("buf", string(buf))
+				SErrorLog.Println("error:", err)
 			}
 		}
 	}()
@@ -163,7 +162,6 @@ func (r *RmmsClient) ActionCmdSub(cmd []byte) {
 		if daqStatus != "1" || scannerStatus != "1" {
 			// 开始测站扫描
 			if err := r.Action4_StartStation(); err != nil {
-				HErrorLog.Println(err)
 				r.Ws.Pubscribe(replyTopic, err.MarshalToCMDReplyBytes(seq, 0))
 				return
 			}
@@ -200,6 +198,7 @@ func (r *RmmsClient) ActionCmdSub(cmd []byte) {
 		go func() {
 			r.DataLoop()
 		}()
+		SuccessLog.Println("启动成功")
 		r.Ws.Pubscribe(replyTopic, response.Success.MarshalToCMDReplyBytes(seq, 0))
 	case CmdStop:
 		if r.Param.Status == RmmsStop {
@@ -224,6 +223,7 @@ func (r *RmmsClient) ActionCmdSub(cmd []byte) {
 
 		// 设置状态为stop,并发送回复
 		r.Param.Status = RmmsStop
+		SuccessLog.Println("停止成功")
 		r.Ws.Pubscribe(statusTopic, r.GenStatusResponse(Normal))
 		r.Ws.Pubscribe(replyTopic, response.Success.MarshalToCMDReplyBytes(seq, 0))
 	case CmdDisconn:
@@ -247,33 +247,28 @@ func (r *RmmsClient) ActionCmdSub(cmd []byte) {
 			r.Param.Status = RmmsDisconnecting
 			// 停止测站扫描
 			if err := r.Action5_StopStation(); err != nil {
-				HErrorLog.Println(err)
 				r.Ws.Pubscribe(replyTopic, err.MarshalToCMDReplyBytes(seq, 0))
 				return
 			}
 
 			// 保存工程
 			if err := r.Action6_SaveProject(); err != nil {
-				HErrorLog.Println(err)
 				r.Ws.Pubscribe(replyTopic, err.MarshalToCMDReplyBytes(seq, 0))
 				return
 			}
 
 			// 断开连接
 			if err := r.Action7_CloseDevice(); err != nil {
-				HErrorLog.Println(err)
 				r.Ws.Pubscribe(replyTopic, err.MarshalToCMDReplyBytes(seq, 0))
 				return
 			}
 
-			fmt.Printf("startCmd: %+v\n", startCmd)
-			fmt.Printf("r.Param: %+v\n", r.Param)
 			// 设置状态为stop,并发送回复
 			r.Param.Status = RmmsDisconn
+			SuccessLog.Println("断开成功")
 			r.Ws.Pubscribe(statusTopic, r.GenStatusResponse(Normal))
 			return
 		}
-
 		HErrorLog.Println("当前的状态为：", r.Param.Status, "不允许执行断开连接操作")
 		r.Ws.Pubscribe(replyTopic, response.StatusDisconnError.MarshalToCMDReplyBytes(seq, 0))
 
@@ -402,7 +397,7 @@ func (r *RmmsClient) GenDiseaseRequestData() (data []byte) {
 	}
 	data, err := json.Marshal(requestData)
 	if err != nil {
-		log.Println(err)
+		SErrorLog.Println(err)
 		return nil
 	}
 
