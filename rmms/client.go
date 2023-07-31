@@ -5,6 +5,7 @@ import (
 	"os"
 	"sync"
 	"time"
+	"io"
 
 	"mms/config"
 	"mms/pkg"
@@ -81,21 +82,34 @@ func init() {
 			panic(err)
 		}
 	}
-	logFile, err := os.OpenFile(file, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0766)
+	logFile, err := os.OpenFile(file, os.O_CREATE|os.O_APPEND|os.O_RDWR, os.ModePerm)
 	if err != nil {
 		panic(err)
 	}
-	log.SetOutput(logFile) // 将文件设置为log输出的文件
-	log.SetFlags(log.LstdFlags | log.Lshortfile | log.LUTC)
+	defer func() {
+		logFile.Close()
+	 }()
+	 
+	// 组合一下即可，os.Stdout代表标准输出流
+	multiWriter := io.MultiWriter(os.Stdout, logFile)
+	log.SetOutput(multiWriter) // 将文件设置为log输出的文件
+	log.SetFlags(log.Ldate | log.Ltime | log.LstdFlags | log.Llongfile  | log.LUTC)
 
 	// 设置日志前缀
-	InfoLog = log.New(logFile, "[Info] ", log.LstdFlags|log.Lshortfile|log.LUTC)
-	DebugLog = log.New(logFile, "[Debug]", log.LstdFlags|log.Lshortfile|log.LUTC)
-	DErrorLog = log.New(logFile, "[DError]", log.LstdFlags|log.Lshortfile|log.LUTC)
-	HErrorLog = log.New(logFile, "[HError]", log.LstdFlags|log.Lshortfile|log.LUTC)
-	SErrorLog = log.New(logFile, "[SError]", log.LstdFlags|log.Lshortfile|log.LUTC)
-	SuccessLog = log.New(logFile, "[Success]", log.LstdFlags|log.Lshortfile|log.LUTC)
-	ReceivedLog = log.New(logFile, "[Received]", log.LstdFlags|log.Lshortfile|log.LUTC)
+	InfoLog = log.New(logFile, "[Info] ", log.LstdFlags|log.Llongfile |log.LUTC)
+	InfoLog.SetOutput(multiWriter)
+	DebugLog = log.New(logFile, "[Debug]", log.LstdFlags|log.Llongfile |log.LUTC)
+	DebugLog.SetOutput(multiWriter)
+	DErrorLog = log.New(logFile, "[DError]", log.LstdFlags|log.Llongfile |log.LUTC)
+	DErrorLog.SetOutput(multiWriter)
+	HErrorLog = log.New(logFile, "[HError]", log.LstdFlags|log.Llongfile |log.LUTC)
+	HErrorLog.SetOutput(multiWriter)
+	SErrorLog = log.New(logFile, "[SError]", log.LstdFlags|log.Llongfile |log.LUTC)
+	SErrorLog.SetOutput(multiWriter)
+	SuccessLog = log.New(logFile, "[Success]", log.LstdFlags|log.Llongfile |log.LUTC)
+	SuccessLog.SetOutput(multiWriter)
+	ReceivedLog = log.New(logFile, "[Received]", log.LstdFlags|log.Llongfile |log.LUTC)
+	ReceivedLog.SetOutput(multiWriter)
 }
 
 // 创建一个rmms客户端

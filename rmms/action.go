@@ -32,10 +32,6 @@ func (r *RmmsClient) sendCommand(port int, cmd string) ([]byte, error) {
 		return nil, fmt.Errorf("发送命令失败:response=$Err")
 	}
 
-	if string(response) != "$OK" {
-		DErrorLog.Println("设备端回复内容为：" + string(response))
-		return nil, fmt.Errorf("发送命令失败:response!=$OK")
-	}
 	// TODO: check response
 	// fmt.Println("response:", string(response))
 
@@ -51,10 +47,17 @@ func (r *RmmsClient) close() error {
 func (r *RmmsClient) action1StartServer() error {
 	InfoLog.Println("发送启动采集操控服务程序指令成功，启动采集操控服务程序...")
 	// 发送消息
-	_, err := r.sendCommand(tcp_port_rmms, "$SCT,RMMSSERVER")
+	resp, err := r.sendCommand(tcp_port_rmms, "$SCT,RMMSSERVER")
 	if err != nil {
 		// gps服务未启动，gps端口连接失败。
 		DErrorLog.Println("发送启动采集操控服务程序指令失败" + ",$SCT,RMMSSERVER" + ":" + err.Error())
+		return err
+	}
+
+	// 校验返回值
+	if string(resp) != "$OK" {
+		err := fmt.Errorf("发送启动采集操控服务程序指令失败" + ",$SCT,RMMSSERVER" + ":" + string(resp))
+		DErrorLog.Println(err.Error())
 		return err
 	}
 
@@ -171,13 +174,17 @@ func (r *RmmsClient) action2OpenGPS() error {
 // 设置采集模式为无 GPS 模式（即隧道模式）
 func (r *RmmsClient) action2NoGPSMode() error {
 	// 打开gps
-	_, err := r.sendCommand(tcp_port_sync, "%SMT4A\r\n")
+	response, err := r.sendCommand(tcp_port_sync, "%SMT4A\r\n")
 	if err != nil {
 		// gps服务未启动，gps端口连接失败。
 		DErrorLog.Println("设置采集模式为无GPS模式失败" + ",%SMT4A" + ":" + err.Error())
 		return err
 	}
 
+	// 校验返回值
+	if string(response) != "$OK" {
+		return fmt.Errorf("设置采集模式为无GPS模式失败")
+	}
 	SuccessLog.Println("2.成功设置采集模式为无GPS模式")
 	return nil
 }
@@ -189,34 +196,54 @@ func (r *RmmsClient) action2ScanType(scanType int) error {
 	// 第二个参数表示设置扫描模式，分为 4 档
 	// 0 表示 50hz 20000 点频，1 表示 50hz 10000 点频，2 表示 100hz 10000 点频，3 表示 200hz 5000 点频；
 	cmd := fmt.Sprintf("$LFTSC,1,%d", scanType)
-	_, err := r.sendCommand(tcp_port_scanner, cmd)
+	response, err := r.sendCommand(tcp_port_scanner, cmd)
 	if err != nil {
 		// gps服务未启动，gps端口连接失败。
 		DErrorLog.Println("设置扫描频率失败" + ",$LFTSC,1," + strconv.Itoa(scanType) + ":" + err.Error())
 		return err
 	}
 
+	// 校验返回值
+	if string(response) != "$OK" {
+		err := fmt.Errorf("设置扫描频率失败" + ",$LFTSC,1," + strconv.Itoa(scanType) + ":" + string(response))
+		DErrorLog.Println(err.Error())
+		return err
+	}
+	//无校验
 	SuccessLog.Printf("3.成功设置扫描频率为：%d \n", scanType)
 	return nil
 }
 
 // 设置扫描模式  %d=0表示为拉行，1表示为推行
 func (r *RmmsClient) action2SetScanMode(mode int) error {
-	_, err := r.sendCommand(tcp_port_scanner, "$LSMOD,"+strconv.Itoa(mode))
+	response, err := r.sendCommand(tcp_port_scanner, "$LSMOD,"+strconv.Itoa(mode))
 	if err != nil {
 		DErrorLog.Println("设置扫描模式失败" + ",$LSMOD," + strconv.Itoa(mode) + ":" + err.Error())
 		return err
 	}
 
+	// 校验返回值
+	if string(response) != "$OK" {
+		err := fmt.Errorf("设置扫描模式失败" + ",$LSMOD," + strconv.Itoa(mode) + ":" + string(response))
+		DErrorLog.Println(err.Error())
+		return err
+	}
 	SuccessLog.Printf("4.成功设置扫描模式为：%d \n", mode)
 	return nil
 }
 
 // 设置编码器、车轮周长参数，其中%d表示对应的编码器频率，%lf表示车轮周长，单位为米。
 func (r *RmmsClient) action2SetEncoderWheelCircumference(encoderFrequency int, wheelCircumference float64) error {
-	_, err := r.sendCommand(tcp_port_scanner, "$DMIV,"+strconv.Itoa(encoderFrequency)+","+strconv.FormatFloat(wheelCircumference, 'f', 2, 64))
+	response, err := r.sendCommand(tcp_port_scanner, "$DMIV,"+strconv.Itoa(encoderFrequency)+","+strconv.FormatFloat(wheelCircumference, 'f', 2, 64))
 	if err != nil {
 		DErrorLog.Printf("设置编码器、车轮周长参数失败,$DMIV,%d,%.2f : %s \n", encoderFrequency, wheelCircumference, err.Error())
+		return err
+	}
+
+	// 校验返回值
+	if string(response) != "$OK" {
+		err := fmt.Errorf("设置编码器、车轮周长参数失败" + ",$DMIV," + strconv.Itoa(encoderFrequency) + "," + strconv.FormatFloat(wheelCircumference, 'f', 2, 64) + ":" + string(response))
+		DErrorLog.Println(err.Error())
 		return err
 	}
 
@@ -226,9 +253,16 @@ func (r *RmmsClient) action2SetEncoderWheelCircumference(encoderFrequency int, w
 
 // 设置惯导工程名
 func (r *RmmsClient) action3SetDAQProjectName(projectName string) error {
-	_, err := r.sendCommand(tcp_port_daq, "$SPN,"+projectName)
+	response, err := r.sendCommand(tcp_port_daq, "$SPN,"+projectName)
 	if err != nil {
 		DErrorLog.Println("设置惯导工程名失败" + ",$SPN," + projectName + ":" + err.Error())
+		return err
+	}
+
+	// 校验返回值
+	if string(response) != "$OK" {
+		err := fmt.Errorf("设置惯导工程名失败" + ",$SPN," + projectName + ":" + string(response))
+		DErrorLog.Println(err.Error())
 		return err
 	}
 
@@ -238,9 +272,16 @@ func (r *RmmsClient) action3SetDAQProjectName(projectName string) error {
 
 // 设置扫描工程名
 func (r *RmmsClient) action3SetScanProjectName(projectName string) error {
-	_, err := r.sendCommand(tcp_port_scanner, "$SPN,"+projectName)
+	response, err := r.sendCommand(tcp_port_scanner, "$SPN,"+projectName)
 	if err != nil {
 		DErrorLog.Println("设置扫描工程名失败" + ",$SPN," + projectName + ":" + err.Error())
+		return err
+	}
+
+	// 校验返回值
+	if string(response) != "$OK" {
+		err := fmt.Errorf("设置扫描工程名失败" + ",$SPN," + projectName + ":" + string(response))
+		DErrorLog.Println(err.Error())
 		return err
 	}
 
@@ -250,11 +291,19 @@ func (r *RmmsClient) action3SetScanProjectName(projectName string) error {
 
 // 设置同步工程名
 func (r *RmmsClient) action3SetSyncProjectName(projectName string) error {
-	_, err := r.sendCommand(tcp_port_sync, "$SPN,"+projectName)
+	response, err := r.sendCommand(tcp_port_sync, "$SPN,"+projectName)
 	if err != nil {
 		DErrorLog.Println("设置同步工程名失败" + ",$SPN," + projectName + ":" + err.Error())
 		return err
 	}
+
+	// 校验返回值
+	if string(response) != "$OK" {
+		err := fmt.Errorf("设置同步工程名失败" + ",$SPN," + projectName + ":" + string(response))
+		DErrorLog.Println(err.Error())
+		return err
+	}
+
 
 	SuccessLog.Println("成功设置同步工程名为：", projectName)
 	return nil
@@ -262,9 +311,16 @@ func (r *RmmsClient) action3SetSyncProjectName(projectName string) error {
 
 // 开始DQA采集
 func (r *RmmsClient) action3StartDqa() error {
-	_, err := r.sendCommand(tcp_port_daq, "$SSG")
+	response, err := r.sendCommand(tcp_port_daq, "$SSG")
 	if err != nil {
 		DErrorLog.Println("开始DQA采集失败" + ",$SSG" + ":" + err.Error())
+		return err
+	}
+
+	// 校验返回值
+	if string(response) != "$OK" {
+		err := fmt.Errorf("开始DQA采集失败" + ",$SSG" + ":" + string(response))
+		DErrorLog.Println(err.Error())
 		return err
 	}
 
@@ -274,9 +330,16 @@ func (r *RmmsClient) action3StartDqa() error {
 
 // 开始syn采集
 func (r *RmmsClient) action3StartSyn() error {
-	_, err := r.sendCommand(tcp_port_sync, "$SSG")
+	response, err := r.sendCommand(tcp_port_sync, "$SSG")
 	if err != nil {
 		DErrorLog.Println("开始syn采集失败" + ",$SSG" + ":" + err.Error())
+		return err
+	}
+
+	// 校验返回值
+	if string(response) != "$OK" {
+		err := fmt.Errorf("开始syn采集失败" + ",$SSG" + ":" + string(response))
+		DErrorLog.Println(err.Error())
 		return err
 	}
 
@@ -285,9 +348,16 @@ func (r *RmmsClient) action3StartSyn() error {
 
 // 开始扫描
 func (r *RmmsClient) action4StartScanner(time string) error {
-	_, err := r.sendCommand(tcp_port_scanner, "$SSG,"+time)
+	response, err := r.sendCommand(tcp_port_scanner, "$SSG,"+time)
 	if err != nil {
 		DErrorLog.Println("开始扫描失败" + ",$SSG," + time + ":" + err.Error())
+		return err
+	}
+
+	// 校验返回值
+	if string(response) != "$OK" {
+		err := fmt.Errorf("开始扫描失败" + ",$SSG," + time + ":" + string(response))
+		DErrorLog.Println(err.Error())
 		return err
 	}
 
@@ -297,9 +367,16 @@ func (r *RmmsClient) action4StartScanner(time string) error {
 
 // 停止扫描
 func (r *RmmsClient) action6StopScan() error {
-	_, err := r.sendCommand(tcp_port_scanner, "$STG")
+	response, err := r.sendCommand(tcp_port_scanner, "$STG")
 	if err != nil {
 		DErrorLog.Println("停止扫描失败" + ",$STG" + ":" + err.Error())
+		return err
+	}
+
+	// 校验返回值
+	if string(response) != "$OK" {
+		err := fmt.Errorf("停止扫描失败" + ",$STG" + ":" + string(response))
+		DErrorLog.Println(err.Error())
 		return err
 	}
 
@@ -309,9 +386,16 @@ func (r *RmmsClient) action6StopScan() error {
 
 // 停止惯导 工程采集
 func (r *RmmsClient) action5StopCollect() error {
-	_, err := r.sendCommand(tcp_port_daq, "$STG")
+	response, err := r.sendCommand(tcp_port_daq, "$STG")
 	if err != nil {
 		DErrorLog.Println("停止惯导采集失败" + ",$STG" + ":" + err.Error())
+		return err
+	}
+
+	// 校验返回值
+	if string(response) != "$OK" {
+		err := fmt.Errorf("停止惯导采集失败" + ",$STG" + ":" + string(response))
+		DErrorLog.Println(err.Error())
 		return err
 	}
 
@@ -321,9 +405,16 @@ func (r *RmmsClient) action5StopCollect() error {
 
 // 停止同步 工程采集
 func (r *RmmsClient) action6StopSynCollect() error {
-	_, err := r.sendCommand(tcp_port_sync, "$STG")
+	response, err := r.sendCommand(tcp_port_sync, "$STG")
 	if err != nil {
 		DErrorLog.Println("停止同步采集失败" + ",$STG" + ":" + err.Error())
+		return err
+	}
+
+	// 校验返回值
+	if string(response) != "$OK" {
+		err := fmt.Errorf("停止同步采集失败" + ",$STG" + ":" + string(response))
+		DErrorLog.Println(err.Error())
 		return err
 	}
 
@@ -333,9 +424,16 @@ func (r *RmmsClient) action6StopSynCollect() error {
 
 // 关闭同步GPS
 func (r *RmmsClient) action7CloseGPS() error {
-	_, err := r.sendCommand(tcp_port_sync, "%SGE51\r\n")
+	response, err := r.sendCommand(tcp_port_sync, "%SGE51\r\n")
 	if err != nil {
 		DErrorLog.Println("关闭GPS失败" + ",%SGE51" + ":" + err.Error())
+		return err
+	}
+
+	// 校验返回值
+	if string(response) != "$OK" {
+		err := fmt.Errorf("关闭GPS失败" + ",%SGE51" + ":" + string(response))
+		DErrorLog.Println(err.Error())
 		return err
 	}
 
@@ -345,9 +443,16 @@ func (r *RmmsClient) action7CloseGPS() error {
 
 // 关闭扫描 (TODO: dangous)
 func (r *RmmsClient) action7CloseScanner() error {
-	_, err := r.sendCommand(tcp_port_scanner, "$SHTD")
+	response, err := r.sendCommand(tcp_port_scanner, "$SHTD")
 	if err != nil {
 		DErrorLog.Println("关闭扫描失败" + ",$SHTD" + ":" + err.Error())
+		return err
+	}
+
+	// 校验返回值
+	if string(response) != "$OK" {
+		err := fmt.Errorf("关闭扫描失败" + ",$SHTD" + ":" + string(response))
+		DErrorLog.Println(err.Error())
 		return err
 	}
 

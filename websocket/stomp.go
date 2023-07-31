@@ -138,7 +138,7 @@ func (ws *StompWS) Pubscribe(topic string, msg []byte) error {
 	}
 
 	// 打印日志
-	fmt.Printf("##### Publish topic: %s, msg: %s ##### \n", topic, string(msg))
+	// fmt.Printf("##### Publish topic: %s, msg: %s ##### \n", topic, string(msg))
 
 	err := ws.conn.Send(topic, "text/plain", msg)
 	if err != nil {
