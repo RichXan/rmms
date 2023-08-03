@@ -3,7 +3,7 @@ package main
 import (
 	"io/ioutil"
 	"log"
-
+	"fmt"
 	"mms/config"
 	rmms "mms/rmms"
 
@@ -21,7 +21,7 @@ func main() {
 	}
 
 	client := rmms.NewRmmsClient(&config)
-
+	fmt.Println("debug:", client.Param.Debug)
 	// 启动服务
 	if respErr := client.Action1_StartServer(); respErr != nil {
 		client.Ws.Pubscribe(config.StompTopic.CmdReply, respErr.MarshalToCMDReplyBytes(0, 0))

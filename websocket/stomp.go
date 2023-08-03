@@ -26,6 +26,7 @@ type StompWSConfig struct {
 	Name    string `mapstructure:"name" yaml:"name"`
 	Passwd  string `mapstructure:"passwd" yaml:"passwd"`
 	Timeout int    `mapstructure:"timeout" yaml:"timeout"`
+	Debug	bool   `mapstructure:"debug" yaml:"debug"`
 }
 
 // 订阅参数结构体

@@ -59,6 +59,7 @@ type RmmsParam struct {
 	ModuleName     string     // 模块名称
 	LastDepthImage string     // 上一张深度图
 	LastGrayImage  string     // 上一张灰度图
+	Debug 		   bool		  // 是否开启调试模式
 }
 
 type RmmsClient struct {
@@ -74,7 +75,6 @@ func init() {
 	path := "./3dlidarLog"
 	filename := now + ".txt"
 	file := path + "/" + filename
-
 	// 判断文件是否存在，不存在则创建
 	if !pkg.IsExist(path) {
 		err := pkg.CreateDir(path)
@@ -86,30 +86,16 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
-	defer func() {
-		logFile.Close()
-	 }()
-	 
-	// 组合一下即可，os.Stdout代表标准输出流
-	multiWriter := io.MultiWriter(os.Stdout, logFile)
-	log.SetOutput(multiWriter) // 将文件设置为log输出的文件
-	log.SetFlags(log.Ldate | log.Ltime | log.LstdFlags | log.Llongfile  | log.LUTC)
 
+	multiWriter := io.MultiWriter(os.Stdout, logFile)
 	// 设置日志前缀
-	InfoLog = log.New(logFile, "[Info] ", log.LstdFlags|log.Llongfile |log.LUTC)
-	InfoLog.SetOutput(multiWriter)
-	DebugLog = log.New(logFile, "[Debug]", log.LstdFlags|log.Llongfile |log.LUTC)
-	DebugLog.SetOutput(multiWriter)
-	DErrorLog = log.New(logFile, "[DError]", log.LstdFlags|log.Llongfile |log.LUTC)
-	DErrorLog.SetOutput(multiWriter)
-	HErrorLog = log.New(logFile, "[HError]", log.LstdFlags|log.Llongfile |log.LUTC)
-	HErrorLog.SetOutput(multiWriter)
-	SErrorLog = log.New(logFile, "[SError]", log.LstdFlags|log.Llongfile |log.LUTC)
-	SErrorLog.SetOutput(multiWriter)
-	SuccessLog = log.New(logFile, "[Success]", log.LstdFlags|log.Llongfile |log.LUTC)
-	SuccessLog.SetOutput(multiWriter)
-	ReceivedLog = log.New(logFile, "[Received]", log.LstdFlags|log.Llongfile |log.LUTC)
-	ReceivedLog.SetOutput(multiWriter)
+	InfoLog = log.New(multiWriter, "[Info] ", log.LstdFlags|log.Llongfile |log.LUTC)
+	DebugLog = log.New(multiWriter, "[Debug]", log.LstdFlags|log.Llongfile |log.LUTC)
+	DErrorLog = log.New(multiWriter, "[DError]", log.LstdFlags|log.Llongfile |log.LUTC)
+	HErrorLog = log.New(multiWriter, "[HError]", log.LstdFlags|log.Llongfile |log.LUTC)
+	SErrorLog = log.New(multiWriter, "[SError]", log.LstdFlags|log.Llongfile |log.LUTC)
+	SuccessLog = log.New(multiWriter, "[Success]", log.LstdFlags|log.Llongfile |log.LUTC)
+	ReceivedLog = log.New(multiWriter, "[Received]", log.LstdFlags|log.Llongfile |log.LUTC)
 }
 
 // 创建一个rmms客户端
@@ -126,6 +112,7 @@ func NewRmmsClient(config *config.GlobalConfig) *RmmsClient {
 			ModuleName:     "3DLidar",
 			LastDepthImage: "",
 			LastGrayImage:  "",
+			Debug:			config.StompConfig.Debug,
 		},
 	}
 }
@@ -253,12 +240,16 @@ func (r *RmmsClient) Action3_NewProject(projectName string) *response.ReplyRespo
 	// 占用锁，等待五分钟
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
-	InfoLog.Println("正在启动惯导检测，等待5分钟...")
-	for i := 0; i < 300; i++ {
-		r.Ws.Pubscribe(r.config.StompTopic.CmdReply,
-			response.WaitForSyncStartReply.MarshalToCMDReplyBytes(r.Param.Seq, 300-i))
-		InfoLog.Printf("waitting %d seconds...\n", 300-i)
-		time.Sleep(1 * time.Second)
+	if !r.Param.Debug {
+		InfoLog.Println("正在启动惯导检测，等待5分钟...")
+		for i := 0; i < 300; i++ {
+			r.Ws.Pubscribe(r.config.StompTopic.CmdReply,
+				response.WaitForSyncStartReply.MarshalToCMDReplyBytes(r.Param.Seq, 300-i))
+			InfoLog.Printf("waitting %d seconds...\n", 300-i)
+			time.Sleep(1 * time.Second)
+		}
+	} else {
+		SuccessLog.Println("启动惯导检测，调试无需等待")
 	}
 	SuccessLog.Println("成功开始syn采集")
 	SuccessLog.Println("惯导检测完毕，可以开始测站")
@@ -330,11 +321,15 @@ func (r *RmmsClient) Action5_StopStation() *response.ReplyResponse {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 	InfoLog.Println("正在停止测站扫描，等待五分钟...")
-	for i := 0; i < 300; i++ {
-		r.Ws.Pubscribe(r.config.StompTopic.CmdReply,
-			response.WaitForSyncStopReply.MarshalToCMDReplyBytes(r.Param.Seq, 300-i))
-		InfoLog.Printf("waitting %d seconds...\n", 300-i)
-		time.Sleep(1 * time.Second)
+	if !r.Param.Debug {
+		for i := 0; i < 300; i++ {
+			r.Ws.Pubscribe(r.config.StompTopic.CmdReply,
+				response.WaitForSyncStopReply.MarshalToCMDReplyBytes(r.Param.Seq, 300-i))
+			InfoLog.Printf("waitting %d seconds...\n", 300-i)
+			time.Sleep(1 * time.Second)
+		}
+	} else {
+		SuccessLog.Println("停止测站扫描，调试无需等待")
 	}
 	SuccessLog.Println("测站扫描停止完毕")
 	return nil

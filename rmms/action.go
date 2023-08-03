@@ -14,8 +14,11 @@ import (
 func (r *RmmsClient) sendCommand(port int, cmd string) ([]byte, error) {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
-	time.Sleep(200 * time.Millisecond)
-
+	// 当cmd 为查询指令时不需要time.sleep
+	if cmd != "$GDS" && cmd != "$GFS" && cmd != "$GST" && cmd != "$GDS,1" && 
+		cmd != "$DKLT,1" && cmd != "$GLDT,1" && cmd != "$ZIMG,1" {
+		time.Sleep(200 * time.Millisecond)
+	}
 	// TODO: 需要发送的什么内容？
 	if cmd == "" {
 		return nil, nil

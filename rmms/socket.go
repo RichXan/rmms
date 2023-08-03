@@ -140,6 +140,12 @@ func (r *RmmsClient) ActionCmdSub(cmd []byte) {
 		// 进入连接状态
 		r.Param.Status = RmmsConnecting
 		r.Ws.Pubscribe(statusTopic, r.GenStatusResponse(Normal))
+		
+		// 启动服务
+		if respErr := r.Action1_StartServer(); respErr != nil {
+			HErrorLog.Println(err)
+			r.Ws.Pubscribe(replyTopic, respErr.MarshalToCMDReplyBytes(seq, 0))
+		}
 
 		// 连接
 		if err := r.Action2_Connect(nScanType, scanMode, encoderFrequency, wheelCircumference); err != nil {

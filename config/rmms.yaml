@@ -8,6 +8,7 @@ stomp:
   name: admin
   passwd: sealan
   timeout: 10
+  debug: false
 
 topic:
   moduleName: 3DLidar
