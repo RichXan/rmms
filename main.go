@@ -5,6 +5,7 @@ import (
 	"log"
 	"fmt"
 	"mms/config"
+	"time"
 	rmms "mms/rmms"
 
 	"gopkg.in/yaml.v2"
@@ -26,6 +27,15 @@ func main() {
 	if respErr := client.Action1_StartServer(); respErr != nil {
 		client.Ws.Pubscribe(config.StompTopic.CmdReply, respErr.MarshalToCMDReplyBytes(0, 0))
 	}
+
+	// 每三秒发送一次心跳
+	go func() {
+		for {
+			client.PushStatus()
+			time.Sleep(3 * time.Second)
+		}
+	}()
+
 	// 监听服务器发送的cmd指令
 	client.Ws.AddSub(config.StompTopic.CmdSub, client.ActionCmdSub)
 

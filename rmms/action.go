@@ -70,8 +70,8 @@ func (r *RmmsClient) action1StartServer() error {
 	InfoLog.Println("发送启动采集操控服务程序指令成功，启动采集操控服务程序...")
 	for i := 0; i+5 < 15; i++ {
 		// 上报设备状态
-		r.Ws.Pubscribe(r.config.StompTopic.CmdReply,
-			response.WaitForConnReply.MarshalToCMDReplyBytes(r.Param.Seq, 15-i))
+		r.Ws.Pubscribe(r.config.StompTopic.DataPush,
+			response.WaitForConnReply.MarshalToCountdownBytes(r.Param.Seq, 15-i))
 		InfoLog.Printf("waitting %d seconds...\n", 15-i)
 		time.Sleep(1 * time.Second)
 	}
@@ -115,8 +115,8 @@ func (r *RmmsClient) connAllTcpServer() error {
 
 	for i := 10; i < 15; i++ {
 		// 上报设备状态
-		r.Ws.Pubscribe(r.config.StompTopic.CmdReply,
-			response.WaitForConnReply.MarshalToCMDReplyBytes(r.Param.Seq, 15-i))
+		r.Ws.Pubscribe(r.config.StompTopic.DataPush,
+			response.WaitForConnReply.MarshalToCountdownBytes(r.Param.Seq, 15-i))
 		InfoLog.Printf("waitting %d seconds...\n", 15-i)
 		time.Sleep(1 * time.Second)
 	}

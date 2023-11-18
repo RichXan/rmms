@@ -117,6 +117,24 @@ func NewRmmsClient(config *config.GlobalConfig) *RmmsClient {
 	}
 }
 
+// 推送设备状态
+func (r *RmmsClient) PushStatus() {
+	var status int
+	switch r.Param.Status {
+	case RmmsDisconn:
+		status = Offline
+	case RmmsConn, RmmsStart, RmmsStop:
+		status = Normal
+	case RmmsConnecting:
+		status = Starting
+	case RmmsDisconnecting:
+		status = Stopping
+	}
+
+	r.Ws.Pubscribe(r.config.StompTopic.StatusPush, 
+		r.GenStatusResponse(status))
+}
+
 // 启动服务，通过总控启动扫描采集服务程序
 func (r *RmmsClient) Action1_StartServer() *response.ReplyResponse {
 	// 初始化连接tcp_port_rmms端口
@@ -134,7 +152,6 @@ func (r *RmmsClient) Action1_StartServer() *response.ReplyResponse {
 		return response.ConnectServerError
 	}
 
-	r.Ws.Pubscribe(r.config.StompTopic.StatusPush, r.GenStatusResponse(Normal))
 	return nil
 }
 
@@ -243,8 +260,8 @@ func (r *RmmsClient) Action3_NewProject(projectName string) *response.ReplyRespo
 	if !r.Param.Debug {
 		InfoLog.Println("正在启动惯导检测，等待5分钟...")
 		for i := 0; i < 300; i++ {
-			r.Ws.Pubscribe(r.config.StompTopic.CmdReply,
-				response.WaitForSyncStartReply.MarshalToCMDReplyBytes(r.Param.Seq, 300-i))
+			r.Ws.Pubscribe(r.config.StompTopic.DataPush,
+				response.WaitForSyncStartReply.MarshalToCountdownBytes(r.Param.Seq, 300-i))
 			InfoLog.Printf("waitting %d seconds...\n", 300-i)
 			time.Sleep(1 * time.Second)
 		}
@@ -297,8 +314,8 @@ func (r *RmmsClient) Action4_StartStation() *response.ReplyResponse {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 	for i := 0; i < 90; i++ {
-		r.Ws.Pubscribe(r.config.StompTopic.CmdReply,
-			response.WaitForScannerStartReply.MarshalToCMDReplyBytes(r.Param.Seq, 90-i))
+		r.Ws.Pubscribe(r.config.StompTopic.DataPush,
+			response.WaitForScannerStartReply.MarshalToCountdownBytes(r.Param.Seq, 90-i))
 		InfoLog.Printf("waitting %d seconds...\n", 90-i)
 		time.Sleep(1 * time.Second)
 	}
@@ -323,8 +340,8 @@ func (r *RmmsClient) Action5_StopStation() *response.ReplyResponse {
 	InfoLog.Println("正在停止测站扫描，等待五分钟...")
 	if !r.Param.Debug {
 		for i := 0; i < 300; i++ {
-			r.Ws.Pubscribe(r.config.StompTopic.CmdReply,
-				response.WaitForSyncStopReply.MarshalToCMDReplyBytes(r.Param.Seq, 300-i))
+			r.Ws.Pubscribe(r.config.StompTopic.DataPush,
+				response.WaitForSyncStopReply.MarshalToCountdownBytes(r.Param.Seq, 300-i))
 			InfoLog.Printf("waitting %d seconds...\n", 300-i)
 			time.Sleep(1 * time.Second)
 		}
@@ -352,8 +369,8 @@ func (r *RmmsClient) Action6_SaveProject() *response.ReplyResponse {
 
 	InfoLog.Println("正在停止扫描仪转动，等待45秒...")
 	for i := 0; i < 45; i++ {
-		r.Ws.Pubscribe(r.config.StompTopic.CmdReply,
-			response.WaitForScannerStopReply.MarshalToCMDReplyBytes(r.Param.Seq, 45-i))
+		r.Ws.Pubscribe(r.config.StompTopic.DataPush,
+			response.WaitForScannerStopReply.MarshalToCountdownBytes(r.Param.Seq, 45-i))
 		InfoLog.Printf("waitting %d seconds...\n", 45-i)
 		time.Sleep(1 * time.Second)
 	}

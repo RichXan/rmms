@@ -37,8 +37,8 @@ type DevicesValue struct {
 	ScannerCollectStatus string `json:"ScannerCollectStatus"`
 	FreeSpace            string `json:"FreeSpace"`
 	LidarFileSizeMB      string `json:"LidarFileSizeMB"`
-	// GrayImage            string `json:"GrayImage"`
-	// DepthImage           string `json:"DepthImage"`
+	GrayImage            string `json:"GrayImage,omitempty"`
+	DepthImage           string `json:"DepthImage,omitempty"`
 }
 
 var codes = map[int]string{}
@@ -108,6 +108,27 @@ func (r *ReplyResponse) MarshalToCMDReplyBytes(seq int, countdown int) []byte {
 	}
 	return msg
 }
+
+// 序列化倒计时数据回复返回格式
+func (r *ReplyResponse) MarshalToCountdownBytes(seq int, countdown int) []byte {
+	resp := map[string]interface{}{
+		"seq":         seq,
+		"module_name": "3DLidar",
+		"data": map[string]interface{}{
+			"devicesvalue": map[string]interface{}{
+				"countdown": countdown,
+			},
+		},
+	}
+	msg, err := json.Marshal(resp)
+	if err != nil {
+		JsonMarshalError.SetSeq(seq)
+		msg, _ = json.Marshal(JsonMarshalError)
+		return msg
+	}
+	return msg
+}
+
 
 var (
 	Success = NewResponse(0, "成功")
